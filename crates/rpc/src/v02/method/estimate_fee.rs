@@ -1,7 +1,8 @@
 use crate::context::RpcContext;
 use crate::v02::types::{reply::FeeEstimate, request::BroadcastedTransaction};
-use crate::v03::method::common::prepare_handle_and_block;
+use anyhow::Context;
 use pathfinder_common::BlockId;
+use primitive_types::U256;
 
 #[derive(serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct EstimateFeeInput {
@@ -17,16 +18,13 @@ crate::error::generate_rpc_error_subset!(
     InvalidCallData
 );
 
-impl From<crate::cairo::ext_py::CallFailure> for EstimateFeeError {
-    fn from(c: crate::cairo::ext_py::CallFailure) -> Self {
-        use crate::cairo::ext_py::CallFailure::*;
-        match c {
-            NoSuchBlock => Self::BlockNotFound,
-            NoSuchContract => Self::ContractNotFound,
-            InvalidEntryPoint => Self::InvalidMessageSelector,
-            ExecutionFailed(e) => Self::Internal(anyhow::anyhow!("Internal error: {}", e)),
-            // Intentionally hide the message under Internal
-            Internal(_) | Shutdown => Self::Internal(anyhow::anyhow!("Internal error")),
+impl From<crate::cairo::starknet_rs::CallError> for EstimateFeeError {
+    fn from(value: crate::cairo::starknet_rs::CallError) -> Self {
+        use crate::cairo::starknet_rs::CallError::*;
+        match value {
+            ContractNotFound => Self::ContractNotFound,
+            InvalidMessageSelector => Self::InvalidMessageSelector,
+            Internal(e) => Self::Internal(e),
         }
     }
 }
@@ -35,18 +33,54 @@ pub async fn estimate_fee(
     context: RpcContext,
     input: EstimateFeeInput,
 ) -> Result<FeeEstimate, EstimateFeeError> {
-    let (handle, gas_price, when, pending_timestamp, pending_update) =
-        prepare_handle_and_block(&context, input.block_id).await?;
+    let (block_id, _pending_timestamp, _pending_update) =
+        super::call::base_block_and_pending_for_call(input.block_id, &context.pending_data).await?;
 
-    let mut result = handle
-        .estimate_fee(
-            vec![input.request],
-            when,
+    let storage = context.storage.clone();
+    let span = tracing::Span::current();
+
+    // FIXME: handle pending data
+    let (block, past_gas_price) = tokio::task::spawn_blocking(move || {
+        let _g = span.enter();
+
+        let mut db = storage.connection()?;
+        let tx = db.transaction().context("Creating database transaction")?;
+
+        let block = tx
+            .block_header(block_id)
+            .context("Reading block")?
+            .ok_or_else(|| EstimateFeeError::BlockNotFound)?;
+
+        let past_gas_price = match input.block_id {
+            BlockId::Latest | BlockId::Pending => None,
+            BlockId::Hash(_) | BlockId::Number(_) => U256::from(block.gas_price.0).into(),
+        };
+
+        Ok::<(_, _), EstimateFeeError>((block, past_gas_price))
+    })
+    .await
+    .context("Getting storage commitment and gas price")??;
+
+    let gas_price = match past_gas_price {
+        Some(gas_price) => gas_price,
+        None => current_gas_price(&context.eth_gas_price).await?,
+    };
+
+    let mut result = tokio::task::spawn_blocking(move || {
+        let result = crate::cairo::starknet_rs::estimate_fee(
+            context.storage,
+            context.chain_id,
+            block.number,
+            block.timestamp,
+            block.sequencer_address,
             gas_price,
-            pending_update,
-            pending_timestamp,
-        )
-        .await?;
+            vec![input.request],
+        )?;
+
+        Ok::<_, EstimateFeeError>(result)
+    })
+    .await
+    .context("Executing transaction")??;
 
     if result.len() != 1 {
         return Err(
@@ -56,7 +90,22 @@ pub async fn estimate_fee(
 
     let result = result.pop().unwrap();
 
-    Ok(result)
+    Ok(FeeEstimate {
+        gas_consumed: result.gas_consumed,
+        gas_price: result.gas_price,
+        overall_fee: result.overall_fee,
+    })
+}
+
+async fn current_gas_price(
+    eth_gas_price: &Option<crate::gas_price::Cached>,
+) -> Result<U256, anyhow::Error> {
+    let gas_price = match eth_gas_price {
+        Some(cached) => cached.get().await,
+        None => None,
+    };
+
+    gas_price.ok_or_else(|| anyhow::anyhow!("Current eth_gasPrice is unavailable"))
 }
 
 #[cfg(test)]
@@ -163,6 +212,7 @@ pub(crate) mod tests {
         };
         use pathfinder_storage::types::state_update::{DeployedContract, StateDiff};
         use pathfinder_storage::Storage;
+        use stark_hash::Felt;
 
         // Mainnet block number 5
         pub(crate) const BLOCK_5: BlockId = BlockId::Hash(BlockHash(felt!(
@@ -173,7 +223,7 @@ pub(crate) mod tests {
             BroadcastedTransaction::Invoke(BroadcastedInvokeTransaction::V1(
                 BroadcastedInvokeTransactionV1 {
                     version: TransactionVersion::ONE_WITH_QUERY_VERSION,
-                    max_fee: Fee(Default::default()),
+                    max_fee: Fee(Felt::from_u64(10_000_000)),
                     signature: vec![],
                     nonce: TransactionNonce(Default::default()),
                     sender_address: account_address,
@@ -271,37 +321,18 @@ pub(crate) mod tests {
             )
         }
 
-        pub(crate) async fn test_context_with_call_handling() -> (
-            tempfile::TempDir,
-            RpcContext,
-            tokio::task::JoinHandle<()>,
-            ContractAddress,
-            BlockHash,
-        ) {
+        pub(crate) async fn test_context(
+        ) -> (tempfile::TempDir, RpcContext, ContractAddress, BlockHash) {
             use pathfinder_common::ChainId;
 
             let (db_dir, storage, account_address, latest_block_hash, _) =
                 test_storage_with_account(GasPrice::ZERO);
 
             let sync_state = Arc::new(crate::SyncState::default());
-            let (call_handle, cairo_handle) = crate::cairo::ext_py::start(
-                storage.path().into(),
-                std::num::NonZeroUsize::try_from(2).unwrap(),
-                futures::future::pending(),
-                Chain::Mainnet,
-            )
-            .await
-            .unwrap();
-
             let sequencer = starknet_gateway_client::Client::new(Chain::Mainnet).unwrap();
             let context = RpcContext::new(storage, sync_state, ChainId::MAINNET, sequencer);
-            (
-                db_dir,
-                context.with_call_handling(call_handle),
-                cairo_handle,
-                account_address,
-                latest_block_hash,
-            )
+
+            (db_dir, context, account_address, latest_block_hash)
         }
 
         fn add_dummy_account(
@@ -396,8 +427,7 @@ pub(crate) mod tests {
 
         #[tokio::test]
         async fn no_such_block() {
-            let (_db_dir, context, _join_handle, account_address, _) =
-                test_context_with_call_handling().await;
+            let (_db_dir, context, account_address, _) = test_context().await;
 
             let input = EstimateFeeInput {
                 request: valid_invoke_v1(account_address),
@@ -409,8 +439,7 @@ pub(crate) mod tests {
 
         #[tokio::test]
         async fn no_such_contract() {
-            let (_db_dir, context, _join_handle, account_address, _) =
-                test_context_with_call_handling().await;
+            let (_db_dir, context, account_address, latest_block_hash) = test_context().await;
 
             let input = EstimateFeeInput {
                 request: BroadcastedTransaction::Invoke(BroadcastedInvokeTransaction::V1(
@@ -423,7 +452,7 @@ pub(crate) mod tests {
                             .unwrap()
                     },
                 )),
-                block_id: BLOCK_5,
+                block_id: BlockId::Hash(latest_block_hash),
             };
             let error = estimate_fee(context, input).await;
             assert_matches::assert_matches!(error, Err(EstimateFeeError::ContractNotFound));
@@ -431,21 +460,26 @@ pub(crate) mod tests {
 
         #[tokio::test]
         async fn successful_invoke_v1() {
-            let (_db_dir, context, _join_handle, account_address, latest_block_hash) =
-                test_context_with_call_handling().await;
+            let (_db_dir, context, account_address, latest_block_hash) = test_context().await;
 
             let input = EstimateFeeInput {
                 request: valid_invoke_v1(account_address),
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, FeeEstimate::default(),);
+            assert_eq!(
+                result,
+                FeeEstimate {
+                    gas_consumed: 2460.into(),
+                    gas_price: 1.into(),
+                    overall_fee: 2460.into()
+                },
+            );
         }
 
         #[test_log::test(tokio::test)]
         async fn successful_declare_v1() {
-            let (_db_dir, context, _join_handle, account_address, latest_block_hash) =
-                test_context_with_call_handling().await;
+            let (_db_dir, context, account_address, latest_block_hash) = test_context().await;
 
             let contract_class = {
                 let json = starknet_gateway_test_fixtures::class_definitions::CONTRACT_DEFINITION;
@@ -458,7 +492,7 @@ pub(crate) mod tests {
             let declare_transaction = BroadcastedTransaction::Declare(
                 BroadcastedDeclareTransaction::V1(BroadcastedDeclareTransactionV1 {
                     version: TransactionVersion::ONE_WITH_QUERY_VERSION,
-                    max_fee: Fee(Default::default()),
+                    max_fee: Fee(Felt::from_u64(10_000_000)),
                     signature: vec![],
                     nonce: TransactionNonce(Default::default()),
                     contract_class,
@@ -471,13 +505,19 @@ pub(crate) mod tests {
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, FeeEstimate::default(),);
+            assert_eq!(
+                result,
+                FeeEstimate {
+                    gas_consumed: 10.into(),
+                    gas_price: 1.into(),
+                    overall_fee: 10.into()
+                },
+            );
         }
 
         #[test_log::test(tokio::test)]
         async fn successful_declare_v2() {
-            let (_db_dir, context, _join_handle, account_address, latest_block_hash) =
-                test_context_with_call_handling().await;
+            let (_db_dir, context, account_address, latest_block_hash) = test_context().await;
 
             let contract_class: SierraContractClass = {
                 let definition =
@@ -509,7 +549,14 @@ pub(crate) mod tests {
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, FeeEstimate::default(),);
+            assert_eq!(
+                result,
+                FeeEstimate {
+                    gas_consumed: 0.into(),
+                    gas_price: 1.into(),
+                    overall_fee: 0.into()
+                }
+            );
         }
     }
 }

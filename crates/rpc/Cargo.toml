@@ -32,6 +32,7 @@ stark_hash = { path = "../stark_hash" }
 starknet-gateway-client = { path = "../gateway-client" }
 starknet-gateway-test-fixtures = { path = "../gateway-test-fixtures", optional = true }
 starknet-gateway-types = { path = "../gateway-types" }
+starknet_in_rust = "0.1.0"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
 tokio-stream = { version = "0.1", features = ["sync"] }

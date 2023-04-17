@@ -257,12 +257,30 @@ impl<'inner> Transaction<'inner> {
         class::class_definition_at(self, block_id, class_hash)
     }
 
+    /// Returns the uncompressed compiled class definition.
+    pub fn compiled_class_definition_at(
+        &self,
+        block_id: BlockId,
+        class_hash: ClassHash,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        class::compiled_class_definition_at(self, block_id, class_hash)
+    }
+
     pub fn contract_class_hash(
         &self,
         block_id: BlockId,
         contract_address: ContractAddress,
     ) -> anyhow::Result<Option<ClassHash>> {
         state_update::contract_class_hash(self, block_id, contract_address)
+    }
+
+    /// Returns the compiled class hash for a class.
+    pub fn compiled_class_hash_at(
+        &self,
+        block_id: BlockId,
+        class_hash: ClassHash,
+    ) -> anyhow::Result<Option<CasmHash>> {
+        class::compiled_class_hash_at(self, block_id, class_hash)
     }
 
     /// Stores the class trie information using reference counting.

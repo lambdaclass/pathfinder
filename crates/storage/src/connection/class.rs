@@ -177,6 +177,122 @@ pub(super) fn class_definition_at(
     Ok(Some(definition))
 }
 
+pub(super) fn compiled_class_definition_at(
+    tx: &Transaction<'_>,
+    block_id: BlockId,
+    class_hash: ClassHash,
+) -> anyhow::Result<Option<Vec<u8>>> {
+    let definition = match block_id {
+        BlockId::Latest => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.definition 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number IS NOT NULL"#,
+            params![&class_hash],
+            |row| row.get_blob(0).map(|x| x.to_vec()),
+        ),
+        BlockId::Number(number) => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.definition 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number <= ?"#,
+            params![&class_hash, &number],
+            |row| row.get_blob(0).map(|x| x.to_vec()),
+        ),
+        BlockId::Hash(hash) => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.definition 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number <= (SELECT number FROM canonical_blocks WHERE hash = ?)"#,
+            params![&class_hash, &hash],
+            |row| row.get_blob(0).map(|x| x.to_vec()),
+        ),
+    }
+    .optional()
+    .context("Querying for class definition")?;
+
+    let Some(definition) = definition else {
+        return Ok(None);
+    };
+    let definition =
+        zstd::decode_all(definition.as_slice()).context("Decompressing class definition")?;
+
+    Ok(Some(definition))
+}
+
+pub(super) fn compiled_class_hash_at(
+    tx: &Transaction<'_>,
+    block_id: BlockId,
+    class_hash: ClassHash,
+) -> anyhow::Result<Option<CasmHash>> {
+    let compiled_class_hash = match block_id {
+        BlockId::Latest => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.compiled_class_hash 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number IS NOT NULL"#,
+            params![&class_hash],
+            |row| row.get_compiled_class_hash(0),
+        ),
+        BlockId::Number(number) => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.compiled_class_hash 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number <= ?"#,
+            params![&class_hash, &number],
+            |row| row.get_compiled_class_hash(0),
+        ),
+        BlockId::Hash(hash) => tx.inner().query_row(
+            r#"SELECT
+                casm_definitions.compiled_class_hash 
+            FROM
+                casm_definitions
+                INNER JOIN class_definitions ON (
+                    class_definitions.hash = casm_definitions.hash
+                )
+            WHERE
+                casm_definitions.hash = ?
+                AND class_definitions.block_number <= (SELECT number FROM canonical_blocks WHERE hash = ?)"#,
+            params![&class_hash, &hash],
+            |row| row.get_compiled_class_hash(0),
+        ),
+    }
+    .optional()
+    .context("Querying for class definition")?;
+
+    Ok(compiled_class_hash)
+}
+
 pub(super) fn insert_class_commitment_leaf(
     transaction: &Transaction<'_>,
     leaf: &ClassCommitmentLeafHash,
@@ -307,9 +423,20 @@ mod tests {
         assert_eq!(casm_result.1, casm_definition);
         assert_eq!(casm_result.2, version);
 
+        let hash = compiled_class_hash_at(&tx, BlockId::Latest, ClassHash(sierra_hash.0))
+            .unwrap()
+            .unwrap();
+        assert_eq!(hash, casm_hash);
+
         let definition = class_definition(&tx, ClassHash(sierra_hash.0))
             .unwrap()
             .unwrap();
         assert_eq!(definition, sierra_definition);
+
+        let definition =
+            compiled_class_definition_at(&tx, BlockId::Latest, ClassHash(sierra_hash.0))
+                .unwrap()
+                .unwrap();
+        assert_eq!(definition, casm_definition);
     }
 }

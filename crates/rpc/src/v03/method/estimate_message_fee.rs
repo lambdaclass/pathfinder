@@ -55,14 +55,12 @@ pub async fn estimate_message_fee(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use pathfinder_common::{
         felt, BlockHash, BlockHeader, BlockNumber, BlockTimestamp, CallParam, CasmHash, Chain,
         ClassHash, ContractAddress, EntryPoint, GasPrice, SierraHash,
     };
     use pathfinder_storage::{types::state_update::StateDiff, JournalMode, Storage};
-    use primitive_types::{H160, H256};
+    use primitive_types::H160;
     use starknet_gateway_test_fixtures::class_definitions::{
         CAIRO_1_1_0_BALANCE_CASM_JSON, CAIRO_1_1_0_BALANCE_SIERRA_JSON,
     };
@@ -227,18 +225,9 @@ mod tests {
     #[tokio::test]
     async fn test_estimate_message_fee() {
         let expected = FeeEstimate {
-            gas_consumed: H256::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000004798",
-            )
-            .unwrap(),
-            gas_price: H256::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000001",
-            )
-            .unwrap(),
-            overall_fee: H256::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000004798",
-            )
-            .unwrap(),
+            gas_consumed: 0x4798.into(),
+            gas_price: 1.into(),
+            overall_fee: 0x4798.into(),
         };
 
         let rpc = setup(Setup::Full).await.expect("RPC context");

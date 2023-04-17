@@ -3,6 +3,12 @@
 inherits = "test"
 strip = "debuginfo"
 
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+lto = true
+codegen-units = 1
+
 [workspace]
 members = [
     "crates/common",

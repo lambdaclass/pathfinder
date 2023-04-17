@@ -146,16 +146,51 @@ mod tests {
 
     // These tests require a Python environment properly set up _and_ a mainnet database with the first six blocks.
     mod ext_py {
+        use std::sync::Arc;
+
         use super::*;
         use crate::v02::method::estimate_fee::tests::ext_py::{
-            test_context_with_call_handling, valid_invoke_v1, BLOCK_5,
+            test_storage_with_account, valid_invoke_v1, BLOCK_5,
         };
         use crate::v02::types::request::{
             BroadcastedDeclareTransaction, BroadcastedDeclareTransactionV1,
             BroadcastedDeclareTransactionV2, BroadcastedInvokeTransactionV1,
         };
         use crate::v02::types::{ContractClass, SierraContractClass};
-        use pathfinder_common::{felt_bytes, CasmHash};
+        use pathfinder_common::{felt_bytes, CasmHash, Chain, GasPrice};
+
+        pub(crate) async fn test_context_with_call_handling() -> (
+            tempfile::TempDir,
+            RpcContext,
+            tokio::task::JoinHandle<()>,
+            ContractAddress,
+            BlockHash,
+        ) {
+            use pathfinder_common::ChainId;
+
+            let (db_dir, storage, account_address, latest_block_hash, _) =
+                test_storage_with_account(GasPrice(1));
+
+            let sync_state = Arc::new(crate::SyncState::default());
+            let (call_handle, cairo_handle) = crate::cairo::ext_py::start(
+                storage.path().into(),
+                std::num::NonZeroUsize::try_from(2).unwrap(),
+                futures::future::pending(),
+                Chain::Mainnet,
+            )
+            .await
+            .unwrap();
+
+            let sequencer = starknet_gateway_client::Client::new(Chain::Mainnet).unwrap();
+            let context = RpcContext::new(storage, sync_state, ChainId::MAINNET, sequencer);
+            (
+                db_dir,
+                context.with_call_handling(call_handle),
+                cairo_handle,
+                account_address,
+                latest_block_hash,
+            )
+        }
 
         #[tokio::test]
         async fn no_such_block() {
@@ -215,7 +250,17 @@ mod tests {
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, vec![FeeEstimate::default(), FeeEstimate::default()]);
+            let expected0 = FeeEstimate {
+                gas_consumed: 3714.into(),
+                gas_price: 1.into(),
+                overall_fee: 3714.into(),
+            };
+            let expected1 = FeeEstimate {
+                gas_consumed: 1266.into(),
+                gas_price: 1.into(),
+                overall_fee: 1266.into(),
+            };
+            assert_eq!(result, vec![expected0, expected1]);
         }
 
         #[test_log::test(tokio::test)]
@@ -247,7 +292,12 @@ mod tests {
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, vec![FeeEstimate::default()]);
+            let expected = FeeEstimate {
+                gas_consumed: 1251.into(),
+                gas_price: 1.into(),
+                overall_fee: 1251.into(),
+            };
+            assert_eq!(result, vec![expected]);
         }
 
         #[test_log::test(tokio::test)]
@@ -285,7 +335,12 @@ mod tests {
                 block_id: BlockId::Hash(latest_block_hash),
             };
             let result = estimate_fee(context, input).await.unwrap();
-            assert_eq!(result, vec![FeeEstimate::default()]);
+            let expected = FeeEstimate {
+                gas_consumed: 1251.into(),
+                gas_price: 1.into(),
+                overall_fee: 1251.into(),
+            };
+            assert_eq!(result, vec![expected]);
         }
     }
 }
