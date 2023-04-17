@@ -147,6 +147,7 @@ impl StarknetBlock {
             sequencer_address: SequencerAddress(hash!(2, n)),
             transaction_commitment: None,
             event_commitment: None,
+            storage_commitment: StorageCommitment(hash!(1, n)),
         }
     }
 }

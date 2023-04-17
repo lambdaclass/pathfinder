@@ -348,6 +348,7 @@ pub mod test_utils {
             sequencer_address: SequencerAddress(Felt::ZERO),
             transaction_commitment: None,
             event_commitment: None,
+            storage_commitment: storage_commitment0,
         };
         let block1_hash = BlockHash(felt_bytes!(b"block 1"));
         let block1 = StarknetBlock {
@@ -359,6 +360,7 @@ pub mod test_utils {
             sequencer_address: SequencerAddress(felt_bytes!(&[1u8])),
             transaction_commitment: None,
             event_commitment: None,
+            storage_commitment: storage_commitment1,
         };
         let latest_hash = BlockHash(felt_bytes!(b"latest"));
         let block2 = StarknetBlock {
@@ -370,6 +372,7 @@ pub mod test_utils {
             sequencer_address: SequencerAddress(felt_bytes!(&[2u8])),
             transaction_commitment: None,
             event_commitment: None,
+            storage_commitment: storage_commitment2,
         };
         StarknetBlocksTable::insert(
             &db_txn,

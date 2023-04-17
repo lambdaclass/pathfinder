@@ -1,5 +1,5 @@
 use anyhow::Context;
-use pathfinder_common::{CasmHash, ClassCommitmentLeafHash, ClassHash};
+use pathfinder_common::{BlockNumber, CasmHash, ClassCommitmentLeafHash, ClassHash};
 use rusqlite::{named_params, params, OptionalExtension, Transaction};
 
 /// Stores Starknet contract information, specifically a contract's
@@ -28,6 +28,54 @@ impl ClassDefinitionsTable {
         )?;
 
         Ok(())
+    }
+
+    pub fn update_block_number_if_null(
+        transaction: &Transaction<'_>,
+        class: ClassHash,
+        block: BlockNumber,
+    ) -> anyhow::Result<bool> {
+        let rows_changed = transaction.execute(
+            "UPDATE class_definitions SET block_number=? WHERE hash=? AND block_number IS NULL",
+            rusqlite::params![block, class],
+        )?;
+
+        match rows_changed {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => unreachable!("Should modify at most one row"),
+        }
+    }
+
+    pub fn get_class_raw(
+        transaction: &Transaction<'_>,
+        hash: ClassHash,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let row = transaction
+            .query_row(
+                "SELECT definition
+                FROM class_definitions
+                WHERE hash = :hash",
+                named_params! {
+                    ":hash": &hash.0.to_be_bytes()
+                },
+                |row| {
+                    let definition: Vec<u8> = row.get("definition")?;
+
+                    Ok(definition)
+                },
+            )
+            .optional()?;
+
+        let definition = match row {
+            None => return Ok(None),
+            Some(definition) => definition,
+        };
+
+        let definition = zstd::decode_all(&*definition)
+            .context("Corruption: invalid compressed column (definition)")?;
+
+        Ok(Some(definition))
     }
 
     /// Returns true for each [ClassHash] if the class definition already exists in the table.
@@ -127,6 +175,60 @@ impl CasmClassTable {
             },
         )?;
         Ok(())
+    }
+
+    pub fn get_class_raw(
+        transaction: &Transaction<'_>,
+        hash: ClassHash,
+    ) -> anyhow::Result<Option<Vec<u8>>> {
+        let row = transaction
+            .query_row(
+                "SELECT definition
+                FROM casm_definitions
+                WHERE hash = :hash",
+                named_params! {
+                    ":hash": &hash.0.to_be_bytes()
+                },
+                |row| {
+                    let definition: Vec<u8> = row.get("definition")?;
+
+                    Ok(definition)
+                },
+            )
+            .optional()?;
+
+        let definition = match row {
+            None => return Ok(None),
+            Some(definition) => definition,
+        };
+
+        let definition = zstd::decode_all(&*definition)
+            .context("Corruption: invalid compressed column (definition)")?;
+
+        Ok(Some(definition))
+    }
+
+    pub fn get_compiled_class_hash(
+        transaction: &Transaction<'_>,
+        hash: ClassHash,
+    ) -> anyhow::Result<Option<CasmHash>> {
+        let casm_hash = transaction
+            .query_row(
+                "SELECT compiled_class_hash
+                FROM casm_definitions
+                WHERE hash = :hash",
+                named_params! {
+                    ":hash": &hash.0.to_be_bytes()
+                },
+                |row| {
+                    let compiled_class_hash: CasmHash = row.get("compiled_class_hash")?;
+
+                    Ok(compiled_class_hash)
+                },
+            )
+            .optional()?;
+
+        Ok(casm_hash)
     }
 
     /// Returns true for each [ClassHash] if the class definition already exists in the table.

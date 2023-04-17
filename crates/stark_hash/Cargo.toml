@@ -18,6 +18,7 @@ stark_curve = { path = "../stark_curve" }
 [dependencies]
 # paritys scale codec locks us here
 bitvec = "0.20.4"
+cairo-vm = { git = "https://github.com/lambdaclass/cairo-rs", rev = "de6a2327b7e629336bc2431787c8e28c3b0f1349" }
 fake = { version = "2.5.0", features = ["derive"], optional = true }
 rand = { version = "0.8.5", optional = true }
 rand_core = "0.6.4"

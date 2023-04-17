@@ -260,6 +260,7 @@ impl StarknetBlocksTable {
                     sequencer_address,
                     transaction_commitment,
                     event_commitment,
+                    storage_commitment,
                 };
 
                 Ok(Some(block))
@@ -393,6 +394,33 @@ impl StarknetBlocksTable {
             }
             None => Ok(Default::default()),
         }
+    }
+
+    /// Returns the [gas price](GasPrice) of the given block.
+    pub fn get_gas_price(
+        tx: &Transaction<'_>,
+        block: StarknetBlocksBlockId,
+    ) -> anyhow::Result<Option<GasPrice>> {
+        match block {
+            StarknetBlocksBlockId::Number(number) => tx.query_row(
+                "SELECT gas_price FROM starknet_blocks WHERE number = ?",
+                [number],
+                |row| row.get::<_, GasPrice>(0),
+            ),
+            StarknetBlocksBlockId::Hash(hash) => tx.query_row(
+                "SELECT gas_price FROM starknet_blocks WHERE hash = ?",
+                [hash],
+                |row| row.get(0),
+            ),
+            StarknetBlocksBlockId::Latest => tx.query_row(
+                "SELECT gas_price FROM starknet_blocks ORDER BY number DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            ),
+        }
+        .optional()
+        .map(|g| g.and_then(|g| if g.0 == 0 { None } else { Some(g) }))
+        .map_err(|e| e.into())
     }
 
     /// Deletes all rows from __head down-to reorg_tail__
@@ -1271,6 +1299,7 @@ pub struct StarknetBlock {
     pub sequencer_address: SequencerAddress,
     pub transaction_commitment: Option<TransactionCommitment>,
     pub event_commitment: Option<EventCommitment>,
+    pub storage_commitment: StorageCommitment,
 }
 
 /// StarknetVersionsTable tracks `starknet_versions` table, which just interns the version
@@ -2061,6 +2090,7 @@ mod tests {
                         sequencer_address: blocks[0].block.sequencer_address,
                         transaction_commitment: Some(TransactionCommitment(Felt::ZERO)),
                         event_commitment: Some(EventCommitment(Felt::ZERO)),
+                        storage_commitment: blocks[0].block.storage_commitment,
                     };
 
                     assert_eq!(
@@ -2341,6 +2371,7 @@ mod tests {
                 sequencer_address: SequencerAddress(felt!("0x1234")),
                 transaction_commitment: None,
                 event_commitment: None,
+                storage_commitment: StorageCommitment(felt!("0x1234")),
             };
 
             // Note: hashes are reverse ordered to trigger the sorting bug.

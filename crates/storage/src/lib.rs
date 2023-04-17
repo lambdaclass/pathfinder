@@ -76,7 +76,7 @@ impl Storage {
             .context("Closing DB after setting journal mode")?;
 
         let manager = SqliteConnectionManager::file(&database_path).with_init(setup_connection);
-        let pool = Pool::builder().build(manager)?;
+        let pool = Pool::builder().max_size(64).build(manager)?;
 
         let mut conn = pool.get()?;
         migrate_database(&mut conn).context("Migrate database")?;
