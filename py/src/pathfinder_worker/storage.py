@@ -19,12 +19,13 @@ class SqliteStateReader(StateReader):
     A StateReader implementation that reads from the SQLite database of pathfinder.
     """
 
-    def __init__(self, connection: sqlite3.Connection, block_number: int):
+    def __init__(self, connection: sqlite3.Connection, block_number: int, logger):
         assert (
             connection.in_transaction
         ), "first query should have started a transaction"
         self.connection = connection
         self.block_number = block_number
+        self.logger = logger
 
     # StateReader API
     async def get_compiled_class(self, compiled_class_hash: int) -> CompiledClassBase:
@@ -142,10 +143,13 @@ class SqliteStateReader(StateReader):
         )
         row = res.fetchone()
         if row is None:
+            self.logger.trace(f"get_storage_at({hex(contract_address)}, {hex(key)}): 0x0")
             return 0
 
         value = row[0]
         value = int.from_bytes(value, byteorder="big")
+
+        self.logger.trace(f"get_storage_at({hex(contract_address)}, {hex(key)}): {hex(value)}")
 
         return value
 

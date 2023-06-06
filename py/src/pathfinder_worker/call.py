@@ -470,7 +470,7 @@ def loop_inner(
 
     general_config = create_general_config(command.chain.value)
 
-    state_reader = SqliteStateReader(connection, block_number=block_info.block_number)
+    state_reader = SqliteStateReader(connection, block_number=block_info.block_number, logger=logger)
     async_state = CachedState(
         block_info=block_info,
         state_reader=state_reader,
