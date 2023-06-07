@@ -321,7 +321,7 @@ fn map_broadcasted_transaction(
                     Address(tx.sender_address.get().into()),
                     // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    // FIXME: we're truncating to lower 128 bits
+                    // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
                     u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
                     signature,
                     tx.nonce.0.into(),
@@ -364,7 +364,7 @@ fn map_broadcasted_transaction(
                 let tx = InternalInvokeFunction::new(
                     Address(tx.sender_address.get().into()),
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
-                    // FIXME: we're truncating to lower 64 bits
+                    // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     1,
                     calldata,
@@ -385,9 +385,9 @@ fn map_broadcasted_transaction(
             let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
             let tx = InternalDeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
-                // FIXME: we're truncating to lower 64 bits
+                // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                // FIXME: we're truncating to lower 64 bits
+                // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
                 u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
                 tx.nonce.0.into(),
                 constructor_calldata,
@@ -427,7 +427,7 @@ fn map_gateway_transaction(
                     contract_class,
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
-                    // FIXME: we're truncating to lower 64 bits
+                    // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     0,
                     signature,
@@ -453,7 +453,7 @@ fn map_gateway_transaction(
                     contract_class,
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
-                    // FIXME: we're truncating to lower 64 bits
+                    // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     1,
                     signature,
@@ -539,9 +539,9 @@ fn map_gateway_transaction(
             let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
             let tx = InternalDeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
-                // FIXME: we're truncating to lower 64 bits
+                // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                // FIXME: we're truncating to lower 64 bits
+                // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
                 u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
                 tx.nonce.0.into(),
                 constructor_calldata,
@@ -591,6 +591,7 @@ fn map_gateway_transaction(
             }
         },
         starknet_gateway_types::reply::transaction::Transaction::L1Handler(tx) => {
+            // FIXME: this is broken right now, waiting for https://github.com/lambdaclass/starknet_in_rust/issues/596
             let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
             let signature = vec![];
 
