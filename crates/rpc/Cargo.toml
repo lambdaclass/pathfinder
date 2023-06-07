@@ -13,7 +13,6 @@ test-utils = ["dep:reqwest", "dep:starknet-gateway-test-fixtures", "tokio/test-u
 anyhow = { workspace = true }
 base64 = "0.13.1"
 cairo-lang-starknet = { git = "https://github.com/starkware-libs/cairo", rev = "4afacfd574de1121d61dea28f8c73e1516c7e07d"}
-cairo-vm = { git = "https://github.com/lambdaclass/cairo-rs", rev = "de6a2327b7e629336bc2431787c8e28c3b0f1349" }
 flate2 = "1.0.25"
 futures = { version = "0.3", default-features = false, features = ["std"] }
 http = "0.2.9"
