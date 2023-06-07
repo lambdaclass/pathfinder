@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
 
     let (tx, rx) = crossbeam_channel::bounded::<Work>(10);
 
-    let executors = (0..24)
+    let executors = (0..num_cpus::get())
         .map(|_| {
             let storage = storage.clone();
             let rx = rx.clone();

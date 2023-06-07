@@ -2,7 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use anyhow::Context;
-use cairo_lang_starknet::contract_class::ContractClass as SierraContractClass;
 use pathfinder_common::{
     CallParam, CallResultValue, ChainId, ClassHash, ContractAddress, EntryPoint, StorageAddress,
     StorageCommitment, TransactionHash,
@@ -25,7 +24,7 @@ use starknet_rs::business_logic::transaction::objects::{
     internal_invoke_function::InternalInvokeFunction, v2::declare_v2::InternalDeclareV2,
 };
 use starknet_rs::core::errors::state_errors::StateError;
-use starknet_rs::core::types::{EntryPointType, Felt252};
+use starknet_rs::core::types::{CasmContractClass, EntryPointType, Felt252, SierraContractClass};
 use starknet_rs::definitions::general_config::{StarknetGeneralConfig, StarknetOsConfig};
 use starknet_rs::services::api::contract_classes::compiled_class::CompiledClass;
 use starknet_rs::services::api::contract_classes::deprecated_contract_class::ContractClass;
@@ -772,7 +771,7 @@ impl StateReader for SqliteReader {
         if let Some(casm_definition) =
             CasmClassTable::get_class_raw(&tx, class_hash).map_err(map_anyhow_to_state_err)?
         {
-            let casm_class: cairo_lang_starknet::casm_contract_class::CasmContractClass =
+            let casm_class: CasmContractClass =
                 serde_json::from_slice(&casm_definition).map_err(|error| {
                     tracing::error!(%error, "Failed to parse CASM class definition");
                     StateError::Storage(StorageError::ErrorFetchingData)
