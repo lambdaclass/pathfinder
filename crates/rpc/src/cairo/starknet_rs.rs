@@ -18,10 +18,8 @@ use starknet_rs::business_logic::fact_state::state::ExecutionResourcesManager;
 use starknet_rs::business_logic::state::cached_state::CachedState;
 use starknet_rs::business_logic::state::state_api::{State, StateReader};
 use starknet_rs::business_logic::transaction::error::TransactionError;
-use starknet_rs::business_logic::transaction::objects::internal_deploy::InternalDeploy;
-use starknet_rs::business_logic::transaction::objects::{
-    internal_declare::InternalDeclare, internal_deploy_account::InternalDeployAccount,
-    internal_invoke_function::InternalInvokeFunction, v2::declare_v2::InternalDeclareV2,
+use starknet_rs::business_logic::transaction::{
+    Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction,
 };
 use starknet_rs::core::errors::state_errors::StateError;
 use starknet_rs::core::types::{CasmContractClass, EntryPointType, Felt252, SierraContractClass};
@@ -257,11 +255,11 @@ fn estimate_fee_impl(
 
 #[derive(Debug)]
 enum Transaction {
-    Declare(InternalDeclare),
-    DeclareV2(InternalDeclareV2),
-    Deploy(InternalDeploy),
-    DeployAccount(InternalDeployAccount),
-    Invoke(InternalInvokeFunction),
+    Declare(Declare),
+    DeclareV2(DeclareV2),
+    Deploy(Deploy),
+    DeployAccount(DeployAccount),
+    Invoke(InvokeFunction),
 }
 
 impl Transaction {
@@ -315,7 +313,7 @@ fn map_broadcasted_transaction(
                     ContractClass::try_from(String::from_utf8_lossy(&contract_class_json).as_ref())
                         .map_err(|_| TransactionError::MissingCompiledClass)?;
 
-                let tx = InternalDeclare::new(
+                let tx = Declare::new(
                     contract_class,
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
@@ -342,7 +340,7 @@ fn map_broadcasted_transaction(
                 let contract_class = serde_json::from_value::<SierraContractClass>(json)
                     .map_err(|_| TransactionError::MissingCompiledClass)?;
 
-                let tx = InternalDeclareV2::new(
+                let tx = DeclareV2::new(
                     &contract_class,
                     tx.compiled_class_hash.0.into(),
                     chain_id.0.into(),
@@ -361,7 +359,7 @@ fn map_broadcasted_transaction(
             crate::v02::types::request::BroadcastedInvokeTransaction::V1(tx) => {
                 let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
                 let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
-                let tx = InternalInvokeFunction::new(
+                let tx = InvokeFunction::new(
                     Address(tx.sender_address.get().into()),
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     // FIXME: we're truncating to lower 128 bits
@@ -383,7 +381,7 @@ fn map_broadcasted_transaction(
                 .map(|p| p.0.into())
                 .collect();
             let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
-            let tx = InternalDeployAccount::new(
+            let tx = DeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
                 // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
@@ -423,7 +421,7 @@ fn map_gateway_transaction(
                     )
                     .map_err(|e| anyhow::anyhow!("Failed to parse class definition: {}", e))?;
 
-                let tx = InternalDeclare::new(
+                let tx = Declare::new(
                     contract_class,
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
@@ -449,7 +447,7 @@ fn map_gateway_transaction(
                     )
                     .map_err(|e| anyhow::anyhow!("Failed to parse class definition: {}", e))?;
 
-                let tx = InternalDeclare::new(
+                let tx = Declare::new(
                     contract_class,
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
@@ -488,7 +486,7 @@ fn map_gateway_transaction(
                             anyhow::anyhow!("Failed to parse Sierra class definition: {}", e)
                         })?;
 
-                let tx = InternalDeclareV2::new(
+                let tx = DeclareV2::new(
                     &contract_class,
                     tx.compiled_class_hash.0.into(),
                     chain_id.0.into(),
@@ -518,7 +516,7 @@ fn map_gateway_transaction(
                     String::from_utf8_lossy(&contract_class).as_ref(),
                 )
                 .map_err(|_| TransactionError::MissingCompiledClass)?;
-            let tx = InternalDeploy::new(
+            let tx = Deploy::new(
                 Address(tx.contract_address_salt.0.into()),
                 contract_class,
                 constructor_calldata,
@@ -537,7 +535,7 @@ fn map_gateway_transaction(
                 .map(|p| p.0.into())
                 .collect();
             let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
-            let tx = InternalDeployAccount::new(
+            let tx = DeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
                 // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
@@ -557,7 +555,7 @@ fn map_gateway_transaction(
                 let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
                 let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
 
-                let tx = InternalInvokeFunction::new(
+                let tx = InvokeFunction::new(
                     Address(tx.sender_address.get().into()),
                     tx.entry_point_selector.0.into(),
                     // FIXME: we're truncating to lower 64 bits
@@ -575,7 +573,7 @@ fn map_gateway_transaction(
                 let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
                 let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
 
-                let tx = InternalInvokeFunction::new(
+                let tx = InvokeFunction::new(
                     Address(tx.sender_address.get().into()),
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     // FIXME: we're truncating to lower 64 bits
@@ -595,7 +593,7 @@ fn map_gateway_transaction(
             let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
             let signature = vec![];
 
-            let tx = InternalInvokeFunction::new(
+            let tx = InvokeFunction::new(
                 Address(tx.contract_address.get().into()),
                 tx.entry_point_selector.0.into(),
                 0,
