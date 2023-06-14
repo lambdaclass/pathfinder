@@ -24,6 +24,7 @@ rand = { version = "0.8.5", optional = true }
 rand_core = "0.6.4"
 serde = { workspace = true }
 stark_curve = { path = "../stark_curve" }
+starknet_api = { git = "https://github.com/starkware-libs/starknet-api", rev = "7a1d4a8" }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

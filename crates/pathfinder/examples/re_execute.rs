@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_chain_id(tx: &pathfinder_storage::Transaction<'_>) -> anyhow::Result<ChainId> {
+fn get_chain_id(tx: &pathfinder_storage::Transaction<'_>) -> anyhow::Result<&'static str> {
     use pathfinder_common::consts::{
         INTEGRATION_GENESIS_HASH, MAINNET_GENESIS_HASH, TESTNET2_GENESIS_HASH, TESTNET_GENESIS_HASH,
     };
@@ -103,10 +103,10 @@ fn get_chain_id(tx: &pathfinder_storage::Transaction<'_>) -> anyhow::Result<Chai
         .context("Getting genesis hash")?;
 
     let chain = match genesis_hash {
-        MAINNET_GENESIS_HASH => ChainId::MAINNET,
-        TESTNET_GENESIS_HASH => ChainId::TESTNET,
-        TESTNET2_GENESIS_HASH => ChainId::TESTNET2,
-        INTEGRATION_GENESIS_HASH => ChainId::INTEGRATION,
+        MAINNET_GENESIS_HASH => "SN_MAIN",
+        TESTNET_GENESIS_HASH => "SN_GOERLI",
+        TESTNET2_GENESIS_HASH => "SN_GOERLI2",
+        INTEGRATION_GENESIS_HASH => "SN_GOERLI",
         _ => anyhow::bail!("Unknown chain"),
     };
 
@@ -118,24 +118,26 @@ struct Work {
     block_number: BlockNumber,
     block_timestamp: BlockTimestamp,
     sequencer_address: SequencerAddress,
-    gas_price: U256,
+    gas_price: u128,
     transactions: Vec<Transaction>,
 }
 
-fn execute(storage: Storage, chain_id: ChainId, rx: crossbeam_channel::Receiver<Work>) {
+fn execute(storage: Storage, chain_id: &str, rx: crossbeam_channel::Receiver<Work>) {
     while let Ok(work) = rx.recv() {
-        match pathfinder_rpc::cairo::starknet_rs::estimate_fee_for_gateway_transactions(
+        match pathfinder_rpc::cairo::blockifier::estimate_fee_for_gateway_transactions(
             storage.clone(),
-            chain_id,
             work.block_number,
             work.block_timestamp,
             work.sequencer_address,
-            work.gas_price,
+            work.storage_commitment,
             work.transactions,
+            chain_id,
+            work.gas_price,
         ) {
             Ok(_) => {}
             Err(error) => {
                 tracing::error!(block_number=%work.block_number, %error, "Transaction re-execution failed");
+                return;
             }
         }
 

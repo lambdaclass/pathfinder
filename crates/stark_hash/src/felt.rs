@@ -76,6 +76,34 @@ impl From<&Felt> for cairo_vm::felt::Felt252 {
     }
 }
 
+impl From<starknet_api::hash::StarkFelt> for Felt {
+    fn from(value: starknet_api::hash::StarkFelt) -> Self {
+        // unwrap() is safe here because StarkFelt is guaranteed to not exceed the group size P
+        Self::from_be_slice(value.bytes()).unwrap()
+    }
+}
+
+impl From<&starknet_api::hash::StarkFelt> for Felt {
+    fn from(value: &starknet_api::hash::StarkFelt) -> Self {
+        // unwrap() is safe here because StarkFelt is guaranteed to not exceed the group size P
+        Self::from_be_slice(value.bytes()).unwrap()
+    }
+}
+
+impl From<Felt> for starknet_api::hash::StarkFelt {
+    fn from(value: Felt) -> Self {
+        // unwrap() is safe because Felt is guaranteed to not exceed the group size P
+        Self::new(value.to_be_bytes()).unwrap()
+    }
+}
+
+impl From<&Felt> for starknet_api::hash::StarkFelt {
+    fn from(value: &Felt) -> Self {
+        // unwrap() is safe because Felt is guaranteed to not exceed the group size P
+        Self::new(value.to_be_bytes()).unwrap()
+    }
+}
+
 /// Error returned by [Felt::from_be_bytes] indicating that
 /// the maximum field value was exceeded.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
