@@ -17,9 +17,9 @@ crate::error::generate_rpc_error_subset!(
     ContractError
 );
 
-impl From<starknet_rs::business_logic::transaction::error::TransactionError> for CallError {
-    fn from(value: starknet_rs::business_logic::transaction::error::TransactionError) -> Self {
-        use starknet_rs::business_logic::transaction::error::TransactionError;
+impl From<starknet_rs::transaction::error::TransactionError> for CallError {
+    fn from(value: starknet_rs::transaction::error::TransactionError) -> Self {
+        use starknet_rs::transaction::error::TransactionError;
         match value {
             TransactionError::EntryPointNotFound => Self::InvalidMessageSelector,
             TransactionError::FailToReadClassHash => Self::ContractNotFound,

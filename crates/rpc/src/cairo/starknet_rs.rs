@@ -10,23 +10,19 @@ use pathfinder_merkle_tree::{ContractsStorageTree, StorageCommitmentTree};
 use pathfinder_storage::{CasmClassTable, ClassDefinitionsTable, ContractsStateTable};
 use primitive_types::U256;
 use stark_hash::Felt;
-use starknet_rs::business_logic::execution::execution_entry_point::ExecutionEntryPoint;
-use starknet_rs::business_logic::execution::{
-    TransactionExecutionContext, TransactionExecutionInfo,
-};
-use starknet_rs::business_logic::fact_state::state::ExecutionResourcesManager;
-use starknet_rs::business_logic::state::cached_state::CachedState;
-use starknet_rs::business_logic::state::state_api::{State, StateReader};
-use starknet_rs::business_logic::transaction::error::TransactionError;
-use starknet_rs::business_logic::transaction::{
-    Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction,
-};
 use starknet_rs::core::errors::state_errors::StateError;
-use starknet_rs::core::types::{CasmContractClass, EntryPointType, Felt252, SierraContractClass};
-use starknet_rs::definitions::general_config::{StarknetGeneralConfig, StarknetOsConfig};
+use starknet_rs::definitions::block_context::{BlockContext, StarknetOsConfig};
+use starknet_rs::execution::execution_entry_point::ExecutionEntryPoint;
+use starknet_rs::execution::{TransactionExecutionContext, TransactionExecutionInfo};
 use starknet_rs::services::api::contract_classes::compiled_class::CompiledClass;
 use starknet_rs::services::api::contract_classes::deprecated_contract_class::ContractClass;
+use starknet_rs::state::cached_state::CachedState;
+use starknet_rs::state::state_api::{State, StateReader};
+use starknet_rs::state::ExecutionResourcesManager;
 use starknet_rs::storage::errors::storage_errors::StorageError;
+use starknet_rs::transaction::error::TransactionError;
+use starknet_rs::transaction::{Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction};
+use starknet_rs::{CasmContractClass, EntryPointType, Felt252, SierraContractClass};
 
 use crate::v02::types::request::BroadcastedTransaction;
 
@@ -38,7 +34,7 @@ pub enum CallError {
 }
 
 impl From<TransactionError> for CallError {
-    fn from(value: starknet_rs::business_logic::transaction::error::TransactionError) -> Self {
+    fn from(value: starknet_rs::transaction::error::TransactionError) -> Self {
         match value {
             TransactionError::EntryPointNotFound => Self::InvalidMessageSelector,
             TransactionError::FailToReadClassHash => Self::ContractNotFound,
@@ -95,14 +91,14 @@ pub(crate) fn call(
 
     let general_config = construct_general_config(chain_id, 1.into())?;
 
-    let execution_context = TransactionExecutionContext::new(
+    let mut execution_context = TransactionExecutionContext::new(
         caller_address,
         0.into(),
         Vec::new(),
         0,
         1.into(),
         general_config.invoke_tx_max_n_steps(),
-        starknet_rs::definitions::constants::TRANSACTION_VERSION,
+        1.into(),
     );
     let mut resources_manager = ExecutionResourcesManager::default();
 
@@ -110,7 +106,7 @@ pub(crate) fn call(
         &mut state,
         &general_config,
         &mut resources_manager,
-        &execution_context,
+        &mut execution_context,
         false,
     )?;
 
@@ -124,14 +120,11 @@ pub(crate) fn call(
     Ok(result)
 }
 
-fn construct_general_config(
-    chain_id: ChainId,
-    gas_price: U256,
-) -> anyhow::Result<StarknetGeneralConfig> {
+fn construct_general_config(chain_id: ChainId, gas_price: U256) -> anyhow::Result<BlockContext> {
     let chain_id = match chain_id {
-        ChainId::MAINNET => starknet_rs::definitions::general_config::StarknetChainId::MainNet,
-        ChainId::TESTNET => starknet_rs::definitions::general_config::StarknetChainId::TestNet,
-        ChainId::TESTNET2 => starknet_rs::definitions::general_config::StarknetChainId::TestNet2,
+        ChainId::MAINNET => starknet_rs::definitions::block_context::StarknetChainId::MainNet,
+        ChainId::TESTNET => starknet_rs::definitions::block_context::StarknetChainId::TestNet,
+        ChainId::TESTNET2 => starknet_rs::definitions::block_context::StarknetChainId::TestNet2,
         _ => return Err(anyhow::anyhow!("Unsupported chain id")),
     };
 
@@ -140,7 +133,7 @@ fn construct_general_config(
         starknet_rs::utils::Address(0.into()),
         gas_price.as_u128(),
     );
-    let mut general_config = StarknetGeneralConfig::default();
+    let mut general_config = BlockContext::default();
     // FIXME: set up block_info
     *general_config.starknet_os_config_mut() = starknet_os_config;
     general_config.block_info_mut().gas_price = gas_price.as_u64();
@@ -266,14 +259,14 @@ impl Transaction {
     pub fn execute<S: State + StateReader>(
         &self,
         state: &mut S,
-        general_config: &StarknetGeneralConfig,
+        block_context: &BlockContext,
     ) -> Result<TransactionExecutionInfo, TransactionError> {
         match self {
-            Transaction::Declare(tx) => tx.execute(state, general_config, true),
-            Transaction::DeclareV2(tx) => tx.execute(state, general_config, tx.max_fee),
-            Transaction::Deploy(tx) => tx.execute(state, general_config),
-            Transaction::DeployAccount(tx) => tx.execute(state, general_config, true),
-            Transaction::Invoke(tx) => tx.execute(state, general_config, true),
+            Transaction::Declare(tx) => tx.execute(state, block_context, true),
+            Transaction::DeclareV2(tx) => tx.execute(state, block_context, true),
+            Transaction::Deploy(tx) => tx.execute(state, block_context),
+            Transaction::DeployAccount(tx) => tx.execute(state, block_context, true),
+            Transaction::Invoke(tx) => tx.execute(state, block_context, 0, true),
         }
     }
 
@@ -319,8 +312,7 @@ fn map_broadcasted_transaction(
                     Address(tx.sender_address.get().into()),
                     // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
-                    u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
+                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     signature,
                     tx.nonce.0.into(),
                     None,
@@ -346,7 +338,7 @@ fn map_broadcasted_transaction(
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
+                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     signature,
                     tx.nonce.0.into(),
                     None,
@@ -364,7 +356,7 @@ fn map_broadcasted_transaction(
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    1,
+                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     calldata,
                     signature,
                     chain_id.0.into(),
@@ -386,7 +378,7 @@ fn map_broadcasted_transaction(
                 // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                 // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
-                u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
+                Felt252::from_bytes_be(tx.version.0.as_bytes()),
                 tx.nonce.0.into(),
                 constructor_calldata,
                 signature,
@@ -427,7 +419,7 @@ fn map_gateway_transaction(
                     Address(tx.sender_address.get().into()),
                     // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    0,
+                    0.into(),
                     signature,
                     tx.nonce.0.into(),
                     None,
@@ -453,7 +445,7 @@ fn map_gateway_transaction(
                     Address(tx.sender_address.get().into()),
                     // FIXME: we're truncating to lower 128 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    1,
+                    1.into(),
                     signature,
                     tx.nonce.0.into(),
                     None,
@@ -492,7 +484,7 @@ fn map_gateway_transaction(
                     chain_id.0.into(),
                     Address(tx.sender_address.get().into()),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    2,
+                    2.into(),
                     signature,
                     tx.nonce.0.into(),
                     None,
@@ -521,8 +513,7 @@ fn map_gateway_transaction(
                 contract_class,
                 constructor_calldata,
                 chain_id.0.into(),
-                // FIXME: truncate
-                tx.version.without_query_version() as u64,
+                tx.version.without_query_version().into(),
                 None,
             )?;
 
@@ -540,7 +531,7 @@ fn map_gateway_transaction(
                 // FIXME: we're truncating to lower 128 bits
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                 // FIXME: we're truncating to lower 64 bits: https://github.com/lambdaclass/starknet_in_rust/issues/356
-                u64::from_be_bytes(tx.version.0.as_bytes()[24..].try_into().unwrap()),
+                Felt252::from_bytes_be(tx.version.0.as_bytes()),
                 tx.nonce.0.into(),
                 constructor_calldata,
                 signature,
@@ -560,7 +551,7 @@ fn map_gateway_transaction(
                     tx.entry_point_selector.0.into(),
                     // FIXME: we're truncating to lower 64 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    0,
+                    0.into(),
                     calldata,
                     signature,
                     chain_id.0.into(),
@@ -578,7 +569,7 @@ fn map_gateway_transaction(
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     // FIXME: we're truncating to lower 64 bits
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    1,
+                    1.into(),
                     calldata,
                     signature,
                     chain_id.0.into(),
@@ -597,7 +588,7 @@ fn map_gateway_transaction(
                 Address(tx.contract_address.get().into()),
                 tx.entry_point_selector.0.into(),
                 0,
-                1,
+                1.into(),
                 calldata,
                 signature,
                 chain_id.0.into(),
@@ -707,7 +698,7 @@ impl StateReader for SqliteReader {
 
     fn get_storage_at(
         &mut self,
-        storage_entry: &starknet_rs::business_logic::state::state_cache::StorageEntry,
+        storage_entry: &starknet_rs::state::state_cache::StorageEntry,
     ) -> Result<Felt252, starknet_rs::core::errors::state_errors::StateError> {
         let (contract_address, storage_key) = storage_entry;
         let storage_key =
