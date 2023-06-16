@@ -21,7 +21,9 @@ use starknet_rs::state::state_api::{State, StateReader};
 use starknet_rs::state::ExecutionResourcesManager;
 use starknet_rs::storage::errors::storage_errors::StorageError;
 use starknet_rs::transaction::error::TransactionError;
-use starknet_rs::transaction::{Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction};
+use starknet_rs::transaction::{
+    Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction, L1Handler,
+};
 use starknet_rs::{CasmContractClass, EntryPointType, Felt252, SierraContractClass};
 
 use crate::v02::types::request::BroadcastedTransaction;
@@ -293,6 +295,7 @@ enum Transaction {
     Deploy(Deploy),
     DeployAccount(DeployAccount),
     Invoke(InvokeFunction),
+    L1Handler(L1Handler),
 }
 
 impl Transaction {
@@ -307,6 +310,7 @@ impl Transaction {
             Transaction::Deploy(tx) => tx.execute(state, block_context),
             Transaction::DeployAccount(tx) => tx.execute(state, block_context, true),
             Transaction::Invoke(tx) => tx.execute(state, block_context, 0, true),
+            Transaction::L1Handler(tx) => tx.execute(state, block_context, 0),
         }
     }
 
@@ -318,6 +322,7 @@ impl Transaction {
                 Transaction::Deploy(tx) => &tx.hash_value,
                 Transaction::DeployAccount(tx) => tx.hash_value(),
                 Transaction::Invoke(tx) => tx.hash_value(),
+                Transaction::L1Handler(tx) => tx.hash_value(),
             }
             .clone()
             .into(),
@@ -620,22 +625,17 @@ fn map_gateway_transaction(
             }
         },
         starknet_gateway_types::reply::transaction::Transaction::L1Handler(tx) => {
-            // FIXME: this is broken right now, waiting for https://github.com/lambdaclass/starknet_in_rust/issues/596
             let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
-            let signature = vec![];
 
-            let tx = InvokeFunction::new(
+            let tx = L1Handler::new(
                 Address(tx.contract_address.get().into()),
                 tx.entry_point_selector.0.into(),
-                0,
-                1.into(),
                 calldata,
-                signature,
+                tx.nonce.0.into(),
                 chain_id.0.into(),
-                Some(tx.nonce.0.into()),
                 None,
             )?;
-            Ok(Transaction::Invoke(tx))
+            Ok(Transaction::L1Handler(tx))
         }
     }
 }
