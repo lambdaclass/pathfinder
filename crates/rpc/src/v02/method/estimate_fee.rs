@@ -41,27 +41,22 @@ pub async fn estimate_fee(
     let span = tracing::Span::current();
 
     // FIXME: handle pending data
-    let (storage_commitment, past_gas_price) = tokio::task::spawn_blocking(move || {
+    let (block, past_gas_price) = tokio::task::spawn_blocking(move || {
         let _g = span.enter();
 
         let mut db = storage.connection()?;
         let tx = db.transaction().context("Creating database transaction")?;
 
-        let storage_commitment = StarknetBlocksTable::get_storage_commitment(&tx, block_id)
-            .context("Reading storage root for block")?
+        let block = StarknetBlocksTable::get(&tx, block_id)
+            .context("Reading block")?
             .ok_or_else(|| EstimateFeeError::BlockNotFound)?;
 
         let past_gas_price = match input.block_id {
             BlockId::Latest | BlockId::Pending => None,
-            BlockId::Hash(h) => {
-                StarknetBlocksTable::get_gas_price(&tx, h.into())?.map(|p| p.0.into())
-            }
-            BlockId::Number(n) => {
-                StarknetBlocksTable::get_gas_price(&tx, n.into())?.map(|p| p.0.into())
-            }
+            BlockId::Hash(_) | BlockId::Number(_) => U256::from(block.gas_price.0).into(),
         };
 
-        Ok::<(_, _), EstimateFeeError>((storage_commitment, past_gas_price))
+        Ok::<(_, _), EstimateFeeError>((block, past_gas_price))
     })
     .await
     .context("Getting storage commitment and gas price")??;
@@ -74,10 +69,13 @@ pub async fn estimate_fee(
     let mut result = tokio::task::spawn_blocking(move || {
         let result = crate::cairo::starknet_rs::estimate_fee(
             context.storage,
-            storage_commitment,
-            vec![input.request],
             context.chain_id,
+            block.number,
+            block.timestamp,
+            block.sequencer_address,
+            block.storage_commitment,
             gas_price,
+            vec![input.request],
         )?;
 
         Ok::<_, EstimateFeeError>(result)

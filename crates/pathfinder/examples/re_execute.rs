@@ -1,6 +1,8 @@
 use anyhow::Context;
 use mimalloc::MiMalloc;
-use pathfinder_common::{BlockNumber, ChainId, StorageCommitment};
+use pathfinder_common::{
+    BlockNumber, BlockTimestamp, ChainId, SequencerAddress, StorageCommitment,
+};
 use pathfinder_storage::{
     JournalMode, StarknetBlocksBlockId, StarknetBlocksTable, StarknetTransactionsTable, Storage,
 };
@@ -72,7 +74,9 @@ fn main() -> anyhow::Result<()> {
         tracing::debug!(%block_number, num_transactions=%transactions.len(), "Submitting block");
 
         tx.send(Work {
-            block_number,
+            block_number: block.number,
+            block_timestamp: block.timestamp,
+            sequencer_address: block.sequencer_address,
             storage_commitment: previous_block.storage_commitment,
             gas_price: block.gas_price.0.into(),
             transactions,
@@ -111,7 +115,9 @@ fn get_chain_id(tx: &rusqlite::Transaction<'_>) -> anyhow::Result<ChainId> {
 
 #[derive(Debug)]
 struct Work {
-    block_number: u64,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
     storage_commitment: StorageCommitment,
     gas_price: U256,
     transactions: Vec<Transaction>,
@@ -121,10 +127,13 @@ fn execute(storage: Storage, chain_id: ChainId, rx: crossbeam_channel::Receiver<
     while let Ok(work) = rx.recv() {
         match pathfinder_rpc::cairo::starknet_rs::estimate_fee_for_gateway_transactions(
             storage.clone(),
-            work.storage_commitment,
-            work.transactions,
             chain_id,
+            work.block_number,
+            work.block_timestamp,
+            work.sequencer_address,
+            work.storage_commitment,
             work.gas_price,
+            work.transactions,
         ) {
             Ok(_) => {}
             Err(error) => {

@@ -70,14 +70,17 @@ pub async fn call(context: RpcContext, input: CallInput) -> Result<CallOutput, C
         let mut db = storage.connection()?;
         let tx = db.transaction().context("Creating database transaction")?;
 
-        let storage_commitment = StarknetBlocksTable::get_storage_commitment(&tx, block_id)
-            .context("Reading storage root for block")?
+        let block = StarknetBlocksTable::get(&tx, block_id)
+            .context("Reading block")?
             .ok_or_else(|| CallError::BlockNotFound)?;
 
         let result = crate::cairo::starknet_rs::call(
             context.storage,
-            storage_commitment,
             context.chain_id,
+            block.number,
+            block.timestamp,
+            block.sequencer_address,
+            block.storage_commitment,
             input.request.contract_address,
             input.request.entry_point_selector,
             input.request.calldata,

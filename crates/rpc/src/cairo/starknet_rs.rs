@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use pathfinder_common::{
-    CallParam, CallResultValue, ChainId, ClassHash, ContractAddress, EntryPoint, StorageAddress,
-    StorageCommitment, TransactionHash,
+    BlockNumber, BlockTimestamp, CallParam, CallResultValue, ChainId, ClassHash, ContractAddress,
+    EntryPoint, SequencerAddress, StorageAddress, StorageCommitment, StorageValue, TransactionHash,
 };
 use pathfinder_merkle_tree::{ContractsStorageTree, StorageCommitmentTree};
 use pathfinder_storage::{CasmClassTable, ClassDefinitionsTable, ContractsStateTable};
@@ -51,8 +51,11 @@ impl From<anyhow::Error> for CallError {
 
 pub(crate) fn call(
     storage: pathfinder_storage::Storage,
-    storage_commitment: StorageCommitment,
     chain_id: ChainId,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
+    storage_commitment: StorageCommitment,
     contract_address: ContractAddress,
     entry_point_selector: EntryPoint,
     calldata: Vec<CallParam>,
@@ -89,7 +92,13 @@ pub(crate) fn call(
         0,
     );
 
-    let general_config = construct_general_config(chain_id, 1.into())?;
+    let general_config = construct_general_config(
+        chain_id,
+        block_number,
+        block_timestamp,
+        sequencer_address,
+        1.into(),
+    )?;
 
     let mut execution_context = TransactionExecutionContext::new(
         caller_address,
@@ -120,7 +129,13 @@ pub(crate) fn call(
     Ok(result)
 }
 
-fn construct_general_config(chain_id: ChainId, gas_price: U256) -> anyhow::Result<BlockContext> {
+fn construct_general_config(
+    chain_id: ChainId,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
+    gas_price: U256,
+) -> anyhow::Result<BlockContext> {
     let chain_id = match chain_id {
         ChainId::MAINNET => starknet_rs::definitions::block_context::StarknetChainId::MainNet,
         ChainId::TESTNET => starknet_rs::definitions::block_context::StarknetChainId::TestNet,
@@ -134,9 +149,13 @@ fn construct_general_config(chain_id: ChainId, gas_price: U256) -> anyhow::Resul
         gas_price.as_u128(),
     );
     let mut general_config = BlockContext::default();
-    // FIXME: set up block_info
     *general_config.starknet_os_config_mut() = starknet_os_config;
-    general_config.block_info_mut().gas_price = gas_price.as_u64();
+    let block_info = general_config.block_info_mut();
+    block_info.gas_price = gas_price.as_u64();
+    block_info.block_number = block_number.get();
+    block_info.block_timestamp = block_timestamp.get();
+    block_info.sequencer_address = starknet_rs::utils::Address(sequencer_address.0.into());
+    block_info.starknet_version = "0.11.2".to_owned();
 
     Ok(general_config)
 }
@@ -149,10 +168,13 @@ pub struct FeeEstimate {
 
 pub(crate) fn estimate_fee(
     storage: pathfinder_storage::Storage,
-    storage_commitment: StorageCommitment,
-    transactions: Vec<BroadcastedTransaction>,
     chain_id: ChainId,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
+    storage_commitment: StorageCommitment,
     gas_price: U256,
+    transactions: Vec<BroadcastedTransaction>,
 ) -> Result<Vec<FeeEstimate>, CallError> {
     let transactions = transactions
         .into_iter()
@@ -161,19 +183,25 @@ pub(crate) fn estimate_fee(
 
     estimate_fee_impl(
         storage,
-        storage_commitment,
-        transactions,
         chain_id,
+        block_number,
+        block_timestamp,
+        sequencer_address,
+        storage_commitment,
         gas_price,
+        transactions,
     )
 }
 
 pub fn estimate_fee_for_gateway_transactions(
     storage: pathfinder_storage::Storage,
-    storage_commitment: StorageCommitment,
-    transactions: Vec<starknet_gateway_types::reply::transaction::Transaction>,
     chain_id: ChainId,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
+    storage_commitment: StorageCommitment,
     gas_price: U256,
+    transactions: Vec<starknet_gateway_types::reply::transaction::Transaction>,
 ) -> anyhow::Result<Vec<FeeEstimate>> {
     let mut db = storage.connection().map_err(map_anyhow_to_state_err)?;
     let db_tx = db.transaction().map_err(map_sqlite_to_state_err)?;
@@ -187,10 +215,13 @@ pub fn estimate_fee_for_gateway_transactions(
 
     let result = estimate_fee_impl(
         storage,
-        storage_commitment,
-        transactions,
         chain_id,
+        block_number,
+        block_timestamp,
+        sequencer_address,
+        storage_commitment,
         gas_price,
+        transactions,
     )
     .map_err(|e| anyhow::anyhow!("Estimate fee failed: {:?}", e))?;
 
@@ -199,10 +230,13 @@ pub fn estimate_fee_for_gateway_transactions(
 
 fn estimate_fee_impl(
     storage: pathfinder_storage::Storage,
-    storage_commitment: StorageCommitment,
-    transactions: Vec<Transaction>,
     chain_id: ChainId,
+    block_number: BlockNumber,
+    block_timestamp: BlockTimestamp,
+    sequencer_address: SequencerAddress,
+    storage_commitment: StorageCommitment,
     gas_price: U256,
+    transactions: Vec<Transaction>,
 ) -> Result<Vec<FeeEstimate>, CallError> {
     let state_reader = SqliteReader {
         storage,
@@ -217,7 +251,13 @@ fn estimate_fee_impl(
         Some(casm_class_cache),
     );
 
-    let general_config = construct_general_config(chain_id, gas_price)?;
+    let general_config = construct_general_config(
+        chain_id,
+        block_number,
+        block_timestamp,
+        sequencer_address,
+        gas_price,
+    )?;
 
     let mut fees = Vec::new();
 
@@ -727,8 +767,11 @@ impl StateReader for SqliteReader {
 
         let state_hash = tree
             .get(pathfinder_contract_address)
-            .map_err(|_| StateError::ContractAddressUnavailable(contract_address.clone()))?
-            .ok_or_else(|| StateError::NoneContractState(contract_address.clone()))?;
+            .map_err(|_| StateError::ContractAddressUnavailable(contract_address.clone()))?;
+
+        let Some(state_hash) = state_hash else {
+            return Ok(0.into());
+        };
 
         let contract_state_root = ContractsStateTable::get_root(&tx, state_hash)
             .map_err(|_| StateError::NoneContractState(contract_address.clone()))?
@@ -739,7 +782,7 @@ impl StateReader for SqliteReader {
         let storage_val = contract_state_tree
             .get(storage_key)
             .map_err(|_| StateError::Storage(StorageError::ErrorFetchingData))?
-            .ok_or_else(|| StateError::NoneStorage(storage_entry.clone()))?;
+            .unwrap_or(StorageValue(Felt::ZERO));
 
         Ok(storage_val.0.into())
     }
