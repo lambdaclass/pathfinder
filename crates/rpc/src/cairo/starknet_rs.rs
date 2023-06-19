@@ -263,8 +263,9 @@ fn estimate_fee_impl(
 
     let mut fees = Vec::new();
 
-    for transaction in &transactions {
-        let span = tracing::debug_span!("execute", transaction_hash=%transaction.hash());
+    for (transaction_idx, transaction) in transactions.iter().enumerate() {
+        let span =
+            tracing::debug_span!("execute", transaction_hash=%transaction.hash(), %block_number);
         let _enter = span.enter();
         tracing::trace!(?transaction, "Estimating transacion");
         let tx_info = transaction.execute(&mut state, &general_config);
@@ -279,7 +280,7 @@ fn estimate_fee_impl(
                 });
             }
             Err(error) => {
-                tracing::error!(%error, "Transaction execution failed");
+                tracing::error!(%error, %transaction_idx, "Transaction execution failed");
                 //return Err(error.into());
             }
         }
@@ -342,14 +343,18 @@ fn map_broadcasted_transaction(
                 let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
 
                 // decode program
-                let contract_class_json = tx
-                    .contract_class
-                    .serialize_to_json()
-                    .map_err(|_| TransactionError::MissingCompiledClass)?;
+                let contract_class_json =
+                    tx.contract_class.serialize_to_json().map_err(|error| {
+                        tracing::error!(%error, "Failed to serialize Cairo class to JSON");
+                        TransactionError::MissingCompiledClass
+                    })?;
 
                 let contract_class =
                     ContractClass::try_from(String::from_utf8_lossy(&contract_class_json).as_ref())
-                        .map_err(|_| TransactionError::MissingCompiledClass)?;
+                        .map_err(|error| {
+                            tracing::error!(%error, "Failed to re-parse Cairo class from JSON");
+                            TransactionError::MissingCompiledClass
+                        })?;
 
                 let tx = Declare::new(
                     contract_class,
@@ -373,8 +378,11 @@ fn map_broadcasted_transaction(
                     "entry_points_by_type": tx.contract_class.entry_points_by_type,
                 });
 
-                let contract_class = serde_json::from_value::<SierraContractClass>(json)
-                    .map_err(|_| TransactionError::MissingCompiledClass)?;
+                let contract_class =
+                    serde_json::from_value::<SierraContractClass>(json).map_err(|error| {
+                        tracing::error!(%error, "Failed to parse Sierra class");
+                        TransactionError::MissingCompiledClass
+                    })?;
 
                 let tx = DeclareV2::new(
                     &contract_class,
@@ -674,7 +682,10 @@ impl StateReader for SqliteReader {
 
         let state_hash = tree
             .get(pathfinder_contract_address)
-            .map_err(|_| StateError::Storage(StorageError::ErrorFetchingData))?
+            .map_err(|error| {
+                tracing::error!(%error, "Failed to fetch contract state hash");
+                StateError::Storage(StorageError::ErrorFetchingData)
+            })?
             .ok_or_else(|| StateError::NoneClassHash(contract_address.clone()))?;
 
         use rusqlite::OptionalExtension;
@@ -686,7 +697,10 @@ impl StateReader for SqliteReader {
                 |row| row.get(0),
             )
             .optional()
-            .map_err(|_| StateError::Storage(StorageError::ErrorFetchingData))?;
+            .map_err(|error| {
+                tracing::error!(%error, %state_hash, "Failed to look up class hash in database");
+                StateError::Storage(StorageError::ErrorFetchingData)
+            })?;
 
         let class_hash =
             class_hash.ok_or_else(|| StateError::NoneClassHash(contract_address.clone()))?;
@@ -716,11 +730,17 @@ impl StateReader for SqliteReader {
 
         let state_hash = tree
             .get(pathfinder_contract_address)
-            .map_err(|_| StateError::ContractAddressUnavailable(contract_address.clone()))?
+            .map_err(|error| {
+                tracing::error!(%error, "Failed to fetch contract state hash");
+                StateError::ContractAddressUnavailable(contract_address.clone())
+            })?
             .ok_or_else(|| StateError::ContractAddressUnavailable(contract_address.clone()))?;
 
         let nonce = ContractsStateTable::get_nonce(&tx, state_hash)
-            .map_err(|_| StateError::ContractAddressUnavailable(contract_address.clone()))?
+            .map_err(|error| {
+                tracing::error!(%error, %state_hash, "Failed to look up contract nonce in database");
+                StateError::ContractAddressUnavailable(contract_address.clone())
+            })?
             .ok_or_else(|| StateError::ContractAddressUnavailable(contract_address.clone()))?;
 
         Ok(nonce.0.into())
@@ -745,33 +765,40 @@ impl StateReader for SqliteReader {
         );
 
         let _span =
-            tracing::debug_span!("get_storage_at", contract_address=%pathfinder_contract_address)
+            tracing::debug_span!("get_storage_at", contract_address=%pathfinder_contract_address, %storage_key)
                 .entered();
 
-        tracing::trace!(%storage_key, "Getting storage value");
+        tracing::trace!("Getting storage value");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
         let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
 
         let tree = StorageCommitmentTree::load(&tx, self.storage_commitment);
 
-        let state_hash = tree
-            .get(pathfinder_contract_address)
-            .map_err(|_| StateError::ContractAddressUnavailable(contract_address.clone()))?;
+        let state_hash = tree.get(pathfinder_contract_address).map_err(|error| {
+            tracing::error!(%error, "Failed to fetch contract state hash");
+            StateError::ContractAddressUnavailable(contract_address.clone())
+        })?;
 
         let Some(state_hash) = state_hash else {
             return Ok(0.into());
         };
 
         let contract_state_root = ContractsStateTable::get_root(&tx, state_hash)
-            .map_err(|_| StateError::NoneContractState(contract_address.clone()))?
+            .map_err(|error| {
+                tracing::error!(%error, %state_hash, "Failed to look up storage root in database");
+                StateError::NoneContractState(contract_address.clone())
+            })?
             .ok_or_else(|| StateError::NoneContractState(contract_address.clone()))?;
 
         let contract_state_tree = ContractsStorageTree::load(&tx, contract_state_root);
 
         let storage_val = contract_state_tree
             .get(storage_key)
-            .map_err(|_| StateError::Storage(StorageError::ErrorFetchingData))?
+            .map_err(|error| {
+                tracing::error!(%error, %storage_key, "Failed to fetch storage value");
+                StateError::Storage(StorageError::ErrorFetchingData)
+            })?
             .unwrap_or(StorageValue(Felt::ZERO));
 
         Ok(storage_val.0.into())
@@ -805,8 +832,10 @@ impl StateReader for SqliteReader {
         if let Some(definition) = ClassDefinitionsTable::get_class_raw(&tx, class_hash)
             .map_err(map_anyhow_to_state_err)?
         {
-            let definition = String::from_utf8(definition)
-                .map_err(|_| StateError::Storage(StorageError::ErrorFetchingData))?;
+            let definition = String::from_utf8(definition).map_err(|error| {
+                tracing::error!(%error, "Failed to convert class definition to UTF-8 string");
+                StateError::Storage(StorageError::ErrorFetchingData)
+            })?;
 
             let contract_class: ContractClass =
                 definition.as_str().try_into().map_err(|error| {
@@ -830,7 +859,9 @@ impl StateReader for SqliteReader {
         let class_hash =
             ClassHash(Felt::from_be_slice(class_hash).expect("Overflow in class hash"));
 
-        tracing::trace!(%class_hash, "Getting compiled class hash");
+        let _span = tracing::debug_span!("get_compiled_class_hash", %class_hash).entered();
+
+        tracing::trace!("Getting compiled class hash");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
         let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
