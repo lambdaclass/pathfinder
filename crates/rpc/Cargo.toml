@@ -33,7 +33,7 @@ stark_hash = { path = "../stark_hash" }
 starknet-gateway-client = { path = "../gateway-client" }
 starknet-gateway-test-fixtures = { path = "../gateway-test-fixtures", optional = true }
 starknet-gateway-types = { path = "../gateway-types" }
-starknet-rs = { git = "https://github.com/kkovaacs/starknet_in_rust", branch = "merged2" }
+starknet-rs = { path = "../../../starknet_in_rust" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
 tokio-stream = { version = "0.1", features = ["sync"] }

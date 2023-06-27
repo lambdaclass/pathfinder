@@ -760,6 +760,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic-polyfill"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ff7eb3f316534d83a8a2c3d1674ace8a5a71198eba31e2e2b597833f699b28"
+dependencies = [
+ "critical-section",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1147,6 +1156,20 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "451a9144bbe8bf0b351672fa0bf34e6dcc8733e2ff3a3201c8f7480fe7eb68a6"
 dependencies = [
+ "lazy_static",
+ "num-bigint 0.4.3",
+ "num-integer",
+ "num-traits 0.2.15",
+ "serde",
+]
+
+[[package]]
+name = "cairo-felt"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f15e4c3ddcf0c3dc5f223554a51bf478409154f648a9ec4cebefb2c66246923"
+dependencies = [
+ "lambdaworks-math",
  "lazy_static",
  "num-bigint 0.4.3",
  "num-integer",
@@ -2687,20 +2710,63 @@ dependencies = [
 ]
 
 [[package]]
+name = "cairo-take_until_unbalanced"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08bee61bf2d27af1cfca0b96a2d5676209b11d8859140fdbf6ec1ebfe9f9bf8a"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "cairo-vm"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c73ed69023e595a18799552803550fe0a3af83713f1fc97f9edaaa677f59a8"
 dependencies = [
  "anyhow",
+ "bincode 2.0.0-rc.3",
+ "bitvec 1.0.1",
+ "cairo-felt 0.5.2",
+ "cairo-take_until_unbalanced 0.28.0",
+ "generic-array",
+ "hashbrown 0.13.2",
+ "hex",
+ "keccak",
+ "lazy_static",
+ "mimalloc",
+ "nom",
+ "num-bigint 0.4.3",
+ "num-integer",
+ "num-prime",
+ "num-traits 0.2.15",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha2 0.10.6",
+ "sha3",
+ "starknet-crypto 0.5.1",
+ "thiserror",
+ "thiserror-no-std",
+]
+
+[[package]]
+name = "cairo-vm"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "059f3d9e32dbf1637be656aad20ff724ecefd102a22c606499b281d15a930396"
+dependencies = [
+ "anyhow",
  "ark-ff 0.4.2",
  "ark-std 0.3.0",
  "bincode 2.0.0-rc.3",
  "bitvec 1.0.1",
- "cairo-felt 0.5.2",
+ "cairo-felt 0.8.0",
  "cairo-lang-casm 1.1.0",
  "cairo-lang-starknet 1.1.0",
- "cairo-take_until_unbalanced",
+ "cairo-take_until_unbalanced 0.32.0",
  "generic-array",
  "hashbrown 0.13.2",
  "hex",
@@ -3204,6 +3270,12 @@ dependencies = [
  "cast",
  "itertools",
 ]
+
+[[package]]
+name = "critical-section"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 
 [[package]]
 name = "crossbeam-channel"
@@ -4295,6 +4367,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
+name = "hash32"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c35f58762feb77d74ebe43bdbc3210f09be9fe6742234d573bacc26ed92b67"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4358,6 +4439,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http",
+]
+
+[[package]]
+name = "heapless"
+version = "0.7.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db04bc24a18b9ea980628ecf00e6c0264f3c1426dac36c00cb49b6fbad8b0743"
+dependencies = [
+ "atomic-polyfill",
+ "hash32",
+ "rustc_version 0.4.0",
+ "spin 0.9.8",
+ "stable_deref_trait",
 ]
 
 [[package]]
@@ -4998,6 +5092,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3c48237b9604c5a4702de6b824e02006c3214327564636aef27c1028a8fa0ed"
 dependencies = [
  "regex",
+]
+
+[[package]]
+name = "lambdaworks-gpu"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b233fcb8213965c77f67c07c3e8294539701a2b5fd55a4e05b48ab2210098063"
+dependencies = [
+ "rand 0.8.5",
+ "thiserror",
+]
+
+[[package]]
+name = "lambdaworks-math"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "000838fc32d61770baebf9e3068606722258cee1490c43f72b1d751bc3c8994d"
+dependencies = [
+ "heapless",
+ "lambdaworks-gpu",
+ "rand 0.8.5",
+ "thiserror",
 ]
 
 [[package]]
@@ -8657,6 +8773,9 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spki"
@@ -8680,6 +8799,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "stable_deref_trait"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
 name = "stark_curve"
 version = "0.1.0"
 dependencies = [
@@ -8694,7 +8819,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "bitvec 0.20.4",
- "cairo-vm",
+ "cairo-vm 0.5.2",
  "criterion",
  "fake",
  "hex",
@@ -8720,9 +8845,8 @@ dependencies = [
 [[package]]
 name = "starknet-contract-class"
 version = "0.1.0"
-source = "git+https://github.com/kkovaacs/starknet_in_rust?branch=merged2#7234154f03bbabc2dab70b174e4768228b437ea8"
 dependencies = [
- "cairo-vm",
+ "cairo-vm 0.8.0",
  "getset",
  "serde",
  "serde_json",
@@ -8747,26 +8871,6 @@ dependencies = [
  "starknet-curve 0.1.0",
  "starknet-ff 0.2.0",
  "thiserror",
- "zeroize",
-]
-
-[[package]]
-name = "starknet-crypto"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8802a516a2556b2ddb9630898d2c8387d928a3e603799b8b2a7dc4018b852c8f"
-dependencies = [
- "crypto-bigint 0.4.9",
- "hex",
- "hmac 0.12.1",
- "num-bigint 0.4.3",
- "num-integer",
- "num-traits 0.2.15",
- "rfc6979 0.3.1",
- "sha2 0.10.6",
- "starknet-crypto-codegen 0.3.1",
- "starknet-curve 0.2.1",
- "starknet-ff 0.3.2",
  "zeroize",
 ]
 
@@ -8819,15 +8923,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84be6079d3060fdbd8b5335574fef3d3783fa2f7ee6474d08ae0c1e4b0a29ba4"
 dependencies = [
  "starknet-ff 0.2.0",
-]
-
-[[package]]
-name = "starknet-curve"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0dbde7ef14d54c2117bc6d2efb68c2383005f1cd749b277c11df874d07b7af"
-dependencies = [
- "starknet-ff 0.3.2",
 ]
 
 [[package]]
@@ -8932,12 +9027,12 @@ dependencies = [
 [[package]]
 name = "starknet-rs"
 version = "0.1.0"
-source = "git+https://github.com/kkovaacs/starknet_in_rust?branch=merged2#7234154f03bbabc2dab70b174e4768228b437ea8"
 dependencies = [
+ "anyhow",
  "awc",
  "cairo-lang-casm 1.1.0",
  "cairo-lang-starknet 1.1.0",
- "cairo-vm",
+ "cairo-vm 0.8.0",
  "cargo-llvm-cov",
  "getset",
  "hex",
@@ -8951,7 +9046,7 @@ dependencies = [
  "serde_json",
  "sha3",
  "starknet-contract-class",
- "starknet-crypto 0.4.3",
+ "starknet-crypto 0.5.1",
  "starknet_api",
  "thiserror",
 ]

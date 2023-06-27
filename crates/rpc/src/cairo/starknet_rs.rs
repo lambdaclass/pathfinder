@@ -124,7 +124,7 @@ pub(crate) fn call(
     let result = call_info
         .retdata
         .iter()
-        .map(|f| Felt::from_be_slice(&f.to_bytes_be()).map(CallResultValue))
+        .map(|f| Felt::from_be_slice(&f.to_be_bytes()).map(CallResultValue))
         .collect::<Result<Vec<CallResultValue>, _>>()
         .context("Converting results to felts")?;
 
@@ -156,7 +156,8 @@ fn construct_general_config(
     block_info.gas_price = gas_price.as_u64();
     block_info.block_number = block_number.get();
     block_info.block_timestamp = block_timestamp.get();
-    block_info.sequencer_address = starknet_rs::utils::Address(sequencer_address.0.into());
+    block_info.sequencer_address =
+        starknet_rs::utils::Address(Felt252::from_bytes_be(&sequencer_address.0 .0));
     block_info.starknet_version = "0.11.2".to_owned();
 
     Ok(general_config)
@@ -306,28 +307,29 @@ impl Transaction {
         block_context: &BlockContext,
     ) -> Result<TransactionExecutionInfo, TransactionError> {
         match self {
-            Transaction::Declare(tx) => tx.execute(state, block_context, true),
-            Transaction::DeclareV2(tx) => tx.execute(state, block_context, true),
+            Transaction::Declare(tx) => tx.execute(state, block_context),
+            Transaction::DeclareV2(tx) => tx.execute(state, block_context),
             Transaction::Deploy(tx) => tx.execute(state, block_context),
-            Transaction::DeployAccount(tx) => tx.execute(state, block_context, true),
-            Transaction::Invoke(tx) => tx.execute(state, block_context, 0, true),
+            Transaction::DeployAccount(tx) => tx.execute(state, block_context),
+            Transaction::Invoke(tx) => tx.execute(state, block_context, 0),
             Transaction::L1Handler(tx) => tx.execute(state, block_context, 0),
         }
     }
 
     pub fn hash(&self) -> TransactionHash {
-        TransactionHash(
-            match self {
-                Transaction::Declare(tx) => &tx.hash_value,
-                Transaction::DeclareV2(tx) => &tx.hash_value,
-                Transaction::Deploy(tx) => &tx.hash_value,
-                Transaction::DeployAccount(tx) => tx.hash_value(),
-                Transaction::Invoke(tx) => tx.hash_value(),
-                Transaction::L1Handler(tx) => tx.hash_value(),
-            }
-            .clone()
-            .into(),
-        )
+        let hash = match self {
+            Transaction::Declare(tx) => &tx.hash_value,
+            Transaction::DeclareV2(tx) => &tx.hash_value,
+            Transaction::Deploy(tx) => &tx.hash_value,
+            Transaction::DeployAccount(tx) => tx.hash_value(),
+            Transaction::Invoke(tx) => tx.hash_value(),
+            Transaction::L1Handler(tx) => tx.hash_value(),
+        };
+        let bytes = hash.to_be_bytes();
+
+        let felt = Felt::from_be_bytes(bytes).unwrap();
+
+        TransactionHash(felt)
     }
 }
 
@@ -340,7 +342,11 @@ fn map_broadcasted_transaction(
     match transaction {
         BroadcastedTransaction::Declare(tx) => match tx {
             crate::v02::types::request::BroadcastedDeclareTransaction::V1(tx) => {
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 // decode program
                 let contract_class_json =
@@ -358,18 +364,22 @@ fn map_broadcasted_transaction(
 
                 let tx = Declare::new(
                     contract_class,
-                    chain_id.0.into(),
-                    Address(tx.sender_address.get().into()),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     signature,
-                    tx.nonce.0.into(),
+                    Felt252::from_bytes_be(&tx.nonce.0 .0),
                     None,
                 )?;
                 Ok(Transaction::Declare(tx))
             }
             crate::v02::types::request::BroadcastedDeclareTransaction::V2(tx) => {
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 let json = serde_json::json!({
                     "abi": [],
@@ -386,13 +396,13 @@ fn map_broadcasted_transaction(
 
                 let tx = DeclareV2::new(
                     &contract_class,
-                    tx.compiled_class_hash.0.into(),
-                    chain_id.0.into(),
-                    Address(tx.sender_address.get().into()),
+                    Felt252::from_bytes_be(&tx.compiled_class_hash.0 .0),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     signature,
-                    tx.nonce.0.into(),
+                    Felt252::from_bytes_be(&tx.nonce.0 .0),
                     None,
                 )?;
 
@@ -401,17 +411,25 @@ fn map_broadcasted_transaction(
         },
         BroadcastedTransaction::Invoke(tx) => match tx {
             crate::v02::types::request::BroadcastedInvokeTransaction::V1(tx) => {
-                let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let calldata = tx
+                    .calldata
+                    .into_iter()
+                    .map(|p| Felt252::from_bytes_be(&p.0 .0))
+                    .collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
                 let tx = InvokeFunction::new(
-                    Address(tx.sender_address.get().into()),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     Felt252::from_bytes_be(tx.version.0.as_bytes()),
                     calldata,
                     signature,
-                    chain_id.0.into(),
-                    Some(tx.nonce.0.into()),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Some(Felt252::from_bytes_be(&tx.nonce.0 .0)),
                     None,
                 )?;
                 Ok(Transaction::Invoke(tx))
@@ -421,18 +439,22 @@ fn map_broadcasted_transaction(
             let constructor_calldata = tx
                 .constructor_calldata
                 .into_iter()
-                .map(|p| p.0.into())
+                .map(|p| Felt252::from_bytes_be(&p.0 .0))
                 .collect();
-            let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+            let signature = tx
+                .signature
+                .into_iter()
+                .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                .collect();
             let tx = DeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                 Felt252::from_bytes_be(tx.version.0.as_bytes()),
-                tx.nonce.0.into(),
+                Felt252::from_bytes_be(&tx.nonce.0 .0),
                 constructor_calldata,
                 signature,
-                Address(tx.contract_address_salt.0.into()),
-                chain_id.0.into(),
+                Felt252::from_bytes_be(&tx.contract_address_salt.0 .0),
+                Felt252::from_bytes_be(&chain_id.0 .0),
                 None,
             )?;
             Ok(Transaction::DeployAccount(tx))
@@ -450,7 +472,11 @@ fn map_gateway_transaction(
     match transaction {
         starknet_gateway_types::reply::transaction::Transaction::Declare(tx) => match tx {
             starknet_gateway_types::reply::transaction::DeclareTransaction::V0(tx) => {
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 // decode program
                 let contract_class =
@@ -464,18 +490,22 @@ fn map_gateway_transaction(
 
                 let tx = Declare::new(
                     contract_class,
-                    chain_id.0.into(),
-                    Address(tx.sender_address.get().into()),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     0.into(),
                     signature,
-                    tx.nonce.0.into(),
+                    Felt252::from_bytes_be(&tx.nonce.0 .0),
                     None,
                 )?;
                 Ok(Transaction::Declare(tx))
             }
             starknet_gateway_types::reply::transaction::DeclareTransaction::V1(tx) => {
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 // decode program
                 let contract_class =
@@ -489,18 +519,22 @@ fn map_gateway_transaction(
 
                 let tx = Declare::new(
                     contract_class,
-                    chain_id.0.into(),
-                    Address(tx.sender_address.get().into()),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     1.into(),
                     signature,
-                    tx.nonce.0.into(),
+                    Felt252::from_bytes_be(&tx.nonce.0 .0),
                     None,
                 )?;
                 Ok(Transaction::Declare(tx))
             }
             starknet_gateway_types::reply::transaction::DeclareTransaction::V2(tx) => {
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 // fetch program
                 let contract_class =
@@ -527,13 +561,13 @@ fn map_gateway_transaction(
 
                 let tx = DeclareV2::new(
                     &contract_class,
-                    tx.compiled_class_hash.0.into(),
-                    chain_id.0.into(),
-                    Address(tx.sender_address.get().into()),
+                    Felt252::from_bytes_be(&tx.compiled_class_hash.0 .0),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     2.into(),
                     signature,
-                    tx.nonce.0.into(),
+                    Felt252::from_bytes_be(&tx.nonce.0 .0),
                     None,
                 )?;
 
@@ -544,7 +578,7 @@ fn map_gateway_transaction(
             let constructor_calldata = tx
                 .constructor_calldata
                 .into_iter()
-                .map(|p| p.0.into())
+                .map(|p| Felt252::from_bytes_be(&p.0 .0))
                 .collect();
 
             let contract_class =
@@ -556,10 +590,10 @@ fn map_gateway_transaction(
                 )
                 .map_err(|_| TransactionError::MissingCompiledClass)?;
             let tx = Deploy::new(
-                Address(tx.contract_address_salt.0.into()),
+                Felt252::from_bytes_be(&tx.contract_address_salt.0 .0),
                 contract_class,
                 constructor_calldata,
-                chain_id.0.into(),
+                Felt252::from_bytes_be(&chain_id.0 .0),
                 tx.version.without_query_version().into(),
                 None,
             )?;
@@ -570,67 +604,91 @@ fn map_gateway_transaction(
             let constructor_calldata = tx
                 .constructor_calldata
                 .into_iter()
-                .map(|p| p.0.into())
+                .map(|p| Felt252::from_bytes_be(&p.0 .0))
                 .collect();
-            let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+            let signature = tx
+                .signature
+                .into_iter()
+                .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                .collect();
             let tx = DeployAccount::new(
                 tx.class_hash.0.to_be_bytes(),
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                 Felt252::from_bytes_be(tx.version.0.as_bytes()),
-                tx.nonce.0.into(),
+                Felt252::from_bytes_be(&tx.nonce.0 .0),
                 constructor_calldata,
                 signature,
-                Address(tx.contract_address_salt.0.into()),
-                chain_id.0.into(),
+                Felt252::from_bytes_be(&tx.contract_address_salt.0 .0),
+                Felt252::from_bytes_be(&chain_id.0 .0),
                 None,
             )?;
             Ok(Transaction::DeployAccount(tx))
         }
         starknet_gateway_types::reply::transaction::Transaction::Invoke(tx) => match tx {
             starknet_gateway_types::reply::transaction::InvokeTransaction::V0(tx) => {
-                let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let calldata = tx
+                    .calldata
+                    .into_iter()
+                    .map(|p| Felt252::from_bytes_be(&p.0 .0))
+                    .collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 let tx = InvokeFunction::new(
-                    Address(tx.sender_address.get().into()),
-                    tx.entry_point_selector.0.into(),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
+                    Felt252::from_bytes_be(&tx.entry_point_selector.0 .0),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     0.into(),
                     calldata,
                     signature,
-                    chain_id.0.into(),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
                     None,
                     None,
                 )?;
                 Ok(Transaction::Invoke(tx))
             }
             starknet_gateway_types::reply::transaction::InvokeTransaction::V1(tx) => {
-                let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
-                let signature = tx.signature.into_iter().map(|s| s.0.into()).collect();
+                let calldata = tx
+                    .calldata
+                    .into_iter()
+                    .map(|p| Felt252::from_bytes_be(&p.0 .0))
+                    .collect();
+                let signature = tx
+                    .signature
+                    .into_iter()
+                    .map(|s| Felt252::from_bytes_be(&s.0 .0))
+                    .collect();
 
                 let tx = InvokeFunction::new(
-                    Address(tx.sender_address.get().into()),
+                    Address(Felt252::from_bytes_be(&tx.sender_address.get().0)),
                     starknet_rs::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
                     1.into(),
                     calldata,
                     signature,
-                    chain_id.0.into(),
-                    Some(tx.nonce.0.into()),
+                    Felt252::from_bytes_be(&chain_id.0 .0),
+                    Some(Felt252::from_bytes_be(&tx.nonce.0 .0)),
                     None,
                 )?;
                 Ok(Transaction::Invoke(tx))
             }
         },
         starknet_gateway_types::reply::transaction::Transaction::L1Handler(tx) => {
-            let calldata = tx.calldata.into_iter().map(|p| p.0.into()).collect();
+            let calldata = tx
+                .calldata
+                .into_iter()
+                .map(|p| Felt252::from_bytes_be(&p.0 .0))
+                .collect();
 
             let tx = L1Handler::new(
-                Address(tx.contract_address.get().into()),
-                tx.entry_point_selector.0.into(),
+                Address(Felt252::from_bytes_be(&tx.contract_address.get().0)),
+                Felt252::from_bytes_be(&tx.entry_point_selector.0 .0),
                 calldata,
-                tx.nonce.0.into(),
-                chain_id.0.into(),
+                Felt252::from_bytes_be(&tx.nonce.0 .0),
+                Felt252::from_bytes_be(&chain_id.0 .0),
                 None,
             )?;
             Ok(Transaction::L1Handler(tx))
@@ -667,7 +725,7 @@ impl StateReader for SqliteReader {
     ) -> Result<starknet_rs::utils::ClassHash, starknet_rs::core::errors::state_errors::StateError>
     {
         let pathfinder_contract_address = pathfinder_common::ContractAddress::new_or_panic(
-            Felt::from_be_slice(&contract_address.0.to_bytes_be())
+            Felt::from_be_slice(&contract_address.0.to_be_bytes())
                 .expect("Overflow in contract address"),
         );
 
@@ -713,7 +771,7 @@ impl StateReader for SqliteReader {
         contract_address: &starknet_rs::utils::Address,
     ) -> Result<Felt252, starknet_rs::core::errors::state_errors::StateError> {
         let pathfinder_contract_address = pathfinder_common::ContractAddress::new_or_panic(
-            Felt::from_be_slice(&contract_address.0.to_bytes_be())
+            Felt::from_be_slice(&contract_address.0.to_be_bytes())
                 .expect("Overflow in contract address"),
         );
 
@@ -743,7 +801,7 @@ impl StateReader for SqliteReader {
             })?
             .ok_or_else(|| StateError::ContractAddressUnavailable(contract_address.clone()))?;
 
-        Ok(nonce.0.into())
+        Ok(Felt252::from_bytes_be(&nonce.0 .0))
     }
 
     fn get_storage_at(
@@ -760,7 +818,7 @@ impl StateReader for SqliteReader {
             })?;
 
         let pathfinder_contract_address = pathfinder_common::ContractAddress::new_or_panic(
-            Felt::from_be_slice(&contract_address.0.to_bytes_be())
+            Felt::from_be_slice(&contract_address.0.to_be_bytes())
                 .expect("Overflow in contract address"),
         );
 
@@ -801,7 +859,7 @@ impl StateReader for SqliteReader {
             })?
             .unwrap_or(StorageValue(Felt::ZERO));
 
-        Ok(storage_val.0.into())
+        Ok(Felt252::from_bytes_be(&storage_val.0 .0))
     }
 
     fn get_contract_class(

@@ -13,7 +13,7 @@ use fake::Dummy;
 ///
 /// Forms the basic building block of most Starknet interactions.
 #[derive(Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-pub struct Felt([u8; 32]);
+pub struct Felt(pub [u8; 32]);
 
 impl std::fmt::Debug for Felt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
