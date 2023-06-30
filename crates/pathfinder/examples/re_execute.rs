@@ -129,7 +129,6 @@ fn execute(storage: Storage, chain_id: &str, rx: crossbeam_channel::Receiver<Wor
             work.block_number,
             work.block_timestamp,
             work.sequencer_address,
-            work.storage_commitment,
             work.transactions,
             chain_id,
             work.gas_price,

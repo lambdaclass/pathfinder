@@ -18,83 +18,84 @@ crate::error::generate_rpc_error_subset!(
     InvalidCallData
 );
 
-impl From<crate::cairo::starknet_rs::CallError> for EstimateFeeError {
-    fn from(value: crate::cairo::starknet_rs::CallError) -> Self {
-        use crate::cairo::starknet_rs::CallError::*;
-        match value {
-            ContractNotFound => Self::ContractNotFound,
-            InvalidMessageSelector => Self::InvalidMessageSelector,
-            Internal(e) => Self::Internal(e),
-        }
-    }
-}
+// impl From<crate::cairo::starknet_rs::CallError> for EstimateFeeError {
+//     fn from(value: crate::cairo::starknet_rs::CallError) -> Self {
+//         use crate::cairo::starknet_rs::CallError::*;
+//         match value {
+//             ContractNotFound => Self::ContractNotFound,
+//             InvalidMessageSelector => Self::InvalidMessageSelector,
+//             Internal(e) => Self::Internal(e),
+//         }
+//     }
+// }
 
 pub async fn estimate_fee(
     context: RpcContext,
     input: EstimateFeeInput,
 ) -> Result<FeeEstimate, EstimateFeeError> {
-    let (block_id, _pending_timestamp, _pending_update) =
-        super::call::base_block_and_pending_for_call(input.block_id, &context.pending_data).await?;
+    unimplemented!();
+    // let (block_id, _pending_timestamp, _pending_update) =
+    //     super::call::base_block_and_pending_for_call(input.block_id, &context.pending_data).await?;
 
-    let storage = context.storage.clone();
-    let span = tracing::Span::current();
+    // let storage = context.storage.clone();
+    // let span = tracing::Span::current();
 
-    // FIXME: handle pending data
-    let (block, past_gas_price) = tokio::task::spawn_blocking(move || {
-        let _g = span.enter();
+    // // FIXME: handle pending data
+    // let (block, past_gas_price) = tokio::task::spawn_blocking(move || {
+    //     let _g = span.enter();
 
-        let mut db = storage.connection()?;
-        let tx = db.transaction().context("Creating database transaction")?;
+    //     let mut db = storage.connection()?;
+    //     let tx = db.transaction().context("Creating database transaction")?;
 
-        let block = tx
-            .block_header(block_id)
-            .context("Reading block")?
-            .ok_or_else(|| EstimateFeeError::BlockNotFound)?;
+    //     let block = tx
+    //         .block_header(block_id)
+    //         .context("Reading block")?
+    //         .ok_or_else(|| EstimateFeeError::BlockNotFound)?;
 
-        let past_gas_price = match input.block_id {
-            BlockId::Latest | BlockId::Pending => None,
-            BlockId::Hash(_) | BlockId::Number(_) => U256::from(block.gas_price.0).into(),
-        };
+    //     let past_gas_price = match input.block_id {
+    //         BlockId::Latest | BlockId::Pending => None,
+    //         BlockId::Hash(_) | BlockId::Number(_) => U256::from(block.gas_price.0).into(),
+    //     };
 
-        Ok::<(_, _), EstimateFeeError>((block, past_gas_price))
-    })
-    .await
-    .context("Getting storage commitment and gas price")??;
+    //     Ok::<(_, _), EstimateFeeError>((block, past_gas_price))
+    // })
+    // .await
+    // .context("Getting storage commitment and gas price")??;
 
-    let gas_price = match past_gas_price {
-        Some(gas_price) => gas_price,
-        None => current_gas_price(&context.eth_gas_price).await?,
-    };
+    // let gas_price = match past_gas_price {
+    //     Some(gas_price) => gas_price,
+    //     None => current_gas_price(&context.eth_gas_price).await?,
+    // };
 
-    let mut result = tokio::task::spawn_blocking(move || {
-        let result = crate::cairo::starknet_rs::estimate_fee(
-            context.storage,
-            context.chain_id,
-            block.number,
-            block.timestamp,
-            block.sequencer_address,
-            gas_price,
-            vec![input.request],
-        )?;
+    // let mut result = tokio::task::spawn_blocking(move || {
+    //     let result = crate::cairo::starknet_rs::estimate_fee(
+    //         context.storage,
+    //         context.chain_id,
+    //         block.number,
+    //         block.timestamp,
+    //         block.sequencer_address,
+    //         gas_price,
+    //         vec![input.request],
+    //     )?;
 
-        Ok::<_, EstimateFeeError>(result)
-    })
-    .await
-    .context("Executing transaction")??;
+    //     Ok::<_, EstimateFeeError>(result)
+    // })
+    // .await
+    // .context("Executing transaction")??;
 
-    if result.len() != 1 {
-        return Err(
-            anyhow::anyhow!("Internal error: expected exactly one fee estimation result").into(),
-        );
-    }
+    // if result.len() != 1 {
+    //     return Err(
+    //         anyhow::anyhow!("Internal error: expected exactly one fee estimation result").into(),
+    //     );
+    // }
 
-    let result = result.pop().unwrap();
+    // let result = result.pop().unwrap();
 
-    Ok(FeeEstimate {
-        gas_consumed: result.gas_consumed,
-        gas_price: result.gas_price,
-        overall_fee: result.overall_fee,
-    })
+    // Ok(FeeEstimate {
+    //     gas_consumed: result.gas_consumed,
+    //     gas_price: result.gas_price,
+    //     overall_fee: result.overall_fee,
+    // })
 }
 
 async fn current_gas_price(

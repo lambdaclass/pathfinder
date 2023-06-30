@@ -16,27 +16,27 @@ crate::error::generate_rpc_error_subset!(
     ContractError
 );
 
-impl From<starknet_in_rust::transaction::error::TransactionError> for CallError {
-    fn from(value: starknet_in_rust::transaction::error::TransactionError) -> Self {
-        use starknet_in_rust::transaction::error::TransactionError;
-        match value {
-            TransactionError::EntryPointNotFound => Self::InvalidMessageSelector,
-            TransactionError::FailToReadClassHash => Self::ContractNotFound,
-            e => Self::Internal(anyhow::anyhow!("Internal error: {}", e)),
-        }
-    }
-}
+// impl From<starknet_in_rust::transaction::error::TransactionError> for CallError {
+//     fn from(value: starknet_in_rust::transaction::error::TransactionError) -> Self {
+//         use starknet_in_rust::transaction::error::TransactionError;
+//         match value {
+//             TransactionError::EntryPointNotFound => Self::InvalidMessageSelector,
+//             TransactionError::FailToReadClassHash => Self::ContractNotFound,
+//             e => Self::Internal(anyhow::anyhow!("Internal error: {}", e)),
+//         }
+//     }
+// }
 
-impl From<crate::cairo::starknet_rs::CallError> for CallError {
-    fn from(value: crate::cairo::starknet_rs::CallError) -> Self {
-        use crate::cairo::starknet_rs::CallError::*;
-        match value {
-            ContractNotFound => Self::ContractNotFound,
-            InvalidMessageSelector => Self::InvalidMessageSelector,
-            Internal(e) => Self::Internal(e),
-        }
-    }
-}
+// impl From<crate::cairo::starknet_rs::CallError> for CallError {
+//     fn from(value: crate::cairo::starknet_rs::CallError) -> Self {
+//         use crate::cairo::starknet_rs::CallError::*;
+//         match value {
+//             ContractNotFound => Self::ContractNotFound,
+//             InvalidMessageSelector => Self::InvalidMessageSelector,
+//             Internal(e) => Self::Internal(e),
+//         }
+//     }
+// }
 
 #[derive(serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct CallInput {
@@ -73,41 +73,42 @@ impl From<FunctionCall> for crate::v02::types::request::Call {
 pub struct CallOutput(#[serde_as(as = "Vec<RpcFelt>")] Vec<CallResultValue>);
 
 pub async fn call(context: RpcContext, input: CallInput) -> Result<CallOutput, CallError> {
-    let (block_id, _pending_timestamp, _pending_update) =
-        base_block_and_pending_for_call(input.block_id, &context.pending_data).await?;
+    unimplemented!();
+    // let (block_id, _pending_timestamp, _pending_update) =
+    //     base_block_and_pending_for_call(input.block_id, &context.pending_data).await?;
 
-    let storage = context.storage.clone();
-    let span = tracing::Span::current();
+    // let storage = context.storage.clone();
+    // let span = tracing::Span::current();
 
-    // FIXME: handle pending data
-    let result = tokio::task::spawn_blocking(move || {
-        let _g = span.enter();
+    // // FIXME: handle pending data
+    // let result = tokio::task::spawn_blocking(move || {
+    //     let _g = span.enter();
 
-        let mut db = storage.connection()?;
-        let tx = db.transaction().context("Creating database transaction")?;
+    //     let mut db = storage.connection()?;
+    //     let tx = db.transaction().context("Creating database transaction")?;
 
-        let block = tx
-            .block_header(block_id)
-            .context("Reading block")?
-            .ok_or_else(|| CallError::BlockNotFound)?;
+    //     let block = tx
+    //         .block_header(block_id)
+    //         .context("Reading block")?
+    //         .ok_or_else(|| CallError::BlockNotFound)?;
 
-        let result = crate::cairo::starknet_rs::call(
-            context.storage,
-            context.chain_id,
-            block.number,
-            block.timestamp,
-            block.sequencer_address,
-            input.request.contract_address,
-            input.request.entry_point_selector,
-            input.request.calldata,
-        )?;
+    //     let result = crate::cairo::starknet_rs::call(
+    //         context.storage,
+    //         context.chain_id,
+    //         block.number,
+    //         block.timestamp,
+    //         block.sequencer_address,
+    //         input.request.contract_address,
+    //         input.request.entry_point_selector,
+    //         input.request.calldata,
+    //     )?;
 
-        Ok(result)
-    })
-    .await
-    .context("Executing call")?;
+    //     Ok(result)
+    // })
+    // .await
+    // .context("Executing call")?;
 
-    result.map(CallOutput)
+    // result.map(CallOutput)
 }
 
 /// Transforms pending requests into latest + optional pending data to apply.

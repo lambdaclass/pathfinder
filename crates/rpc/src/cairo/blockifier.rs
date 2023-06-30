@@ -9,15 +9,12 @@ use blockifier::{
 };
 use pathfinder_common::{
     BlockNumber, BlockTimestamp, ClassHash, ContractNonce, SequencerAddress, StorageAddress,
-    StorageCommitment,
+    StorageValue,
 };
-use pathfinder_merkle_tree::{ContractsStorageTree, StorageCommitmentTree};
-use pathfinder_storage::{CasmClassTable, ClassDefinitionsTable, ContractsStateTable};
 use primitive_types::U256;
+use stark_hash::Felt;
 use starknet_api::{
-    core::PatriciaKey,
-    hash::{StarkFelt, StarkHash},
-    patricia_key, StarknetApiError,
+    core::PatriciaKey, hash::StarkFelt, hash::StarkHash, patricia_key, StarknetApiError,
 };
 
 pub struct FeeEstimate {
@@ -31,7 +28,6 @@ pub fn estimate_fee_for_gateway_transactions(
     block_number: BlockNumber,
     block_timestamp: BlockTimestamp,
     sequencer_address: SequencerAddress,
-    storage_commitment: StorageCommitment,
     transactions: Vec<starknet_gateway_types::reply::transaction::Transaction>,
     chain_id: &str,
     gas_price: u128,
@@ -41,7 +37,7 @@ pub fn estimate_fee_for_gateway_transactions(
 
     let state_reader = SqliteReader {
         storage,
-        storage_commitment,
+        block_number,
     };
 
     let mut state = CachedState::new(state_reader);
@@ -112,6 +108,7 @@ fn construct_block_context(
         gas_price,
         invoke_tx_max_n_steps: 1_000_000,
         validate_max_n_steps: 1_000_000,
+        max_recursion_depth: 50,
     }
 }
 
@@ -146,14 +143,14 @@ fn default_resource_fee_costs() -> HashMap<String, f64> {
 
 fn map_gateway_transaction(
     transaction: starknet_gateway_types::reply::transaction::Transaction,
-    db_transaction: &rusqlite::Transaction<'_>,
+    db_transaction: &pathfinder_storage::Transaction<'_>,
 ) -> anyhow::Result<Transaction> {
     match transaction {
         starknet_gateway_types::reply::transaction::Transaction::Declare(tx) => match tx {
             starknet_gateway_types::reply::transaction::DeclareTransaction::V0(tx) => {
-                let class_definition =
-                    ClassDefinitionsTable::get_class_raw(db_transaction, tx.class_hash)?
-                        .context("Fetching class definition")?;
+                let class_definition = db_transaction
+                    .class_definition(tx.class_hash)?
+                    .context("Fetching class definition")?;
 
                 let class_definition = String::from_utf8(class_definition)?;
 
@@ -193,9 +190,9 @@ fn map_gateway_transaction(
                 Ok(tx)
             }
             starknet_gateway_types::reply::transaction::DeclareTransaction::V1(tx) => {
-                let class_definition =
-                    ClassDefinitionsTable::get_class_raw(db_transaction, tx.class_hash)?
-                        .context("Fetching class definition")?;
+                let class_definition = db_transaction
+                    .class_definition(tx.class_hash)?
+                    .context("Fetching class definition")?;
 
                 let class_definition = String::from_utf8(class_definition)?;
 
@@ -235,9 +232,9 @@ fn map_gateway_transaction(
                 Ok(tx)
             }
             starknet_gateway_types::reply::transaction::DeclareTransaction::V2(tx) => {
-                let class_definition =
-                    CasmClassTable::get_class_raw(db_transaction, tx.class_hash)?
-                        .context("Fetching class definition")?;
+                let class_definition = db_transaction
+                    .class_definition(tx.class_hash)?
+                    .context("Fetching class definition")?;
 
                 let class_definition = String::from_utf8(class_definition)?;
 
@@ -426,7 +423,16 @@ fn map_gateway_transaction(
 #[derive(Clone)]
 struct SqliteReader {
     pub storage: pathfinder_storage::Storage,
-    pub storage_commitment: StorageCommitment,
+    pub block_number: BlockNumber,
+}
+
+impl SqliteReader {
+    fn state_block_id(&self) -> Option<pathfinder_storage::BlockId> {
+        match self.block_number.get() {
+            0 => None,
+            n => Some(BlockNumber::new_or_panic(n - 1).into()),
+        }
+    }
 }
 
 impl StateReader for SqliteReader {
@@ -444,37 +450,25 @@ impl StateReader for SqliteReader {
             pathfinder_common::ContractAddress::new_or_panic(contract_address.0.key().into());
 
         let _span =
-            tracing::debug_span!("get_storage_at", contract_address=%pathfinder_contract_address, storage_commitment=%self.storage_commitment)
+            tracing::debug_span!("get_storage_at", contract_address=%pathfinder_contract_address, block_number=%self.block_number)
                 .entered();
 
         tracing::trace!(%storage_key, "Getting storage value");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        let tree = StorageCommitmentTree::load(&tx, self.storage_commitment);
-
-        let state_hash = tree
-            .get(pathfinder_contract_address)
-            .map_err(map_anyhow_to_state_err)?;
-
-        let Some(state_hash) = state_hash else {
-            return Ok(stark_hash::Felt::ZERO.into())
+        let Some(block_id) = self.state_block_id() else {
+            return Ok(Felt::ZERO.into());
         };
 
-        let contract_state_root = ContractsStateTable::get_root(&tx, state_hash)
-            .map_err(map_anyhow_to_state_err)?
-            .ok_or_else(|| {
-                tracing::error!("Failed to fetch contract state root");
-                StateError::StateReadError("Error getting contract state root".to_owned())
-            })?;
+        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        let contract_state_tree = ContractsStorageTree::load(&tx, contract_state_root);
-
-        let storage_val = contract_state_tree
-            .get(storage_key)
+        let storage_val = tx
+            .storage_value(block_id, pathfinder_contract_address, storage_key)
             .map_err(map_anyhow_to_state_err)?
-            .unwrap_or(pathfinder_common::StorageValue::ZERO);
+            .unwrap_or(StorageValue(Felt::ZERO));
 
         Ok(storage_val.0.into())
     }
@@ -493,19 +487,14 @@ impl StateReader for SqliteReader {
         tracing::trace!("Getting nonce for contract");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        let tree = StorageCommitmentTree::load(&tx, self.storage_commitment);
-
-        let state_hash = tree
-            .get(pathfinder_contract_address)
-            .map_err(map_anyhow_to_state_err)?;
-
-        let Some(state_hash) = state_hash else {
-            return Ok(starknet_api::core::Nonce(pathfinder_common::ContractNonce::ZERO.0.into()))
+        let Some(block_id) = self.state_block_id() else {
+            return Ok(starknet_api::core::Nonce(pathfinder_common::ContractNonce::ZERO.0.into()));
         };
 
-        let nonce = ContractsStateTable::get_nonce(&tx, state_hash)
+        let nonce = tx
+            .contract_nonce(pathfinder_contract_address, block_id)
             .map_err(map_anyhow_to_state_err)?
             .unwrap_or(pathfinder_common::ContractNonce::ZERO);
 
@@ -523,33 +512,20 @@ impl StateReader for SqliteReader {
 
         tracing::trace!("Getting class hash at contract");
 
-        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
-
-        let tree = StorageCommitmentTree::load(&tx, self.storage_commitment);
-
-        let state_hash = tree
-            .get(pathfinder_contract_address)
-            .map_err(map_anyhow_to_state_err)?;
-
-        let Some(state_hash) = state_hash else {
-            return Ok(starknet_api::core::ClassHash(ClassHash::ZERO.0.into()))
+        let Some(block_id) = self.state_block_id() else {
+            return Ok(starknet_api::core::ClassHash(ClassHash::ZERO.0.into()));
         };
 
-        use rusqlite::OptionalExtension;
+        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        let class_hash: Option<ClassHash> = tx
-            .query_row(
-                "SELECT hash FROM contract_states WHERE state_hash=?",
-                [state_hash],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(map_sqlite_to_state_err)?;
+        let class_hash = tx
+            .contract_class_hash(block_id, pathfinder_contract_address)
+            .map_err(map_anyhow_to_state_err)?;
 
-        let class_hash = class_hash.ok_or_else(|| {
-            StateError::StateReadError("Error getting class hash from contract state".to_owned())
-        })?;
+        let Some(class_hash) = class_hash else {
+            return Ok(starknet_api::core::ClassHash(ClassHash::ZERO.0.into()))
+        };
 
         Ok(starknet_api::core::ClassHash(class_hash.0.into()))
     }
@@ -567,12 +543,17 @@ impl StateReader for SqliteReader {
         tracing::trace!("Getting class");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        // FIXME: should check if the class exists at the block we're on!
+        let block_id = self.state_block_id().ok_or_else(|| {
+            blockifier::state::errors::StateError::UndeclaredClassHash(
+                starknet_api::core::ClassHash(class_hash.0.into()),
+            )
+        })?;
 
-        if let Some(casm_definition) =
-            CasmClassTable::get_class_raw(&tx, class_hash).map_err(map_anyhow_to_state_err)?
+        if let Some(casm_definition) = tx
+            .compiled_class_definition_at(block_id, class_hash)
+            .map_err(map_anyhow_to_state_err)?
         {
             let casm_definition = String::from_utf8(casm_definition).map_err(|error| {
                 StateError::StateReadError(format!(
@@ -592,7 +573,8 @@ impl StateReader for SqliteReader {
             ));
         }
 
-        if let Some(definition) = ClassDefinitionsTable::get_class_raw(&tx, class_hash)
+        if let Some(definition) = tx
+            .class_definition_at(block_id, class_hash)
             .map_err(map_anyhow_to_state_err)?
         {
             let definition = String::from_utf8(definition).map_err(|error| {
@@ -630,9 +612,16 @@ impl StateReader for SqliteReader {
         tracing::trace!(%class_hash, "Getting compiled class hash");
 
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_sqlite_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
-        let casm_hash = CasmClassTable::get_compiled_class_hash(&tx, class_hash)
+        let block_id = self.state_block_id().ok_or_else(|| {
+            blockifier::state::errors::StateError::UndeclaredClassHash(
+                starknet_api::core::ClassHash(class_hash.0.into()),
+            )
+        })?;
+
+        let casm_hash = tx
+            .compiled_class_hash_at(block_id, class_hash)
             .map_err(map_anyhow_to_state_err)?
             .ok_or_else(|| {
                 StateError::StateReadError("Error getting compiled class hash".to_owned())
@@ -640,11 +629,6 @@ impl StateReader for SqliteReader {
 
         Ok(starknet_api::core::CompiledClassHash(casm_hash.0.into()))
     }
-}
-
-fn map_sqlite_to_state_err(error: rusqlite::Error) -> StateError {
-    tracing::error!(%error, "Internal error in state reader");
-    StateError::StateReadError(error.to_string())
 }
 
 fn map_anyhow_to_state_err(error: anyhow::Error) -> StateError {
