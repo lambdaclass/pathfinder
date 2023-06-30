@@ -93,6 +93,19 @@ fn construct_block_context(
     sequencer_address: SequencerAddress,
     gas_price: u128,
 ) -> BlockContext {
+    let fee_token_address = starknet_api::core::ContractAddress(match chain_id {
+        "SN_MAIN" => {
+            patricia_key!("0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7")
+        }
+        "SN_GOERLI" => {
+            patricia_key!("0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7")
+        }
+        "SN_GOERLI2" => {
+            patricia_key!("0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7")
+        }
+        _ => panic!("Unsupported chain id"),
+    });
+
     BlockContext {
         chain_id: starknet_api::core::ChainId(chain_id.to_owned()),
         block_number: starknet_api::block::BlockNumber(block_number.get()),
@@ -101,9 +114,7 @@ fn construct_block_context(
             PatriciaKey::try_from(StarkFelt::from(sequencer_address.0))
                 .expect("Sequencer address overflow"),
         ),
-        fee_token_address: starknet_api::core::ContractAddress(patricia_key!(
-            "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
-        )),
+        fee_token_address,
         vm_resource_fee_cost: default_resource_fee_costs(),
         gas_price,
         invoke_tx_max_n_steps: 1_000_000,
