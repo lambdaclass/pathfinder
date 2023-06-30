@@ -2,9 +2,8 @@ use std::num::NonZeroU32;
 
 use anyhow::Context;
 use mimalloc::MiMalloc;
-use pathfinder_common::{BlockNumber, BlockTimestamp, ChainId, SequencerAddress};
+use pathfinder_common::{BlockNumber, BlockTimestamp, SequencerAddress};
 use pathfinder_storage::{BlockId, JournalMode, Storage};
-use primitive_types::U256;
 use starknet_gateway_types::reply::transaction::Transaction;
 
 #[global_allocator]
@@ -27,7 +26,7 @@ fn main() -> anyhow::Result<()> {
 
     let database_path = std::env::args().nth(1).unwrap();
     let storage = Storage::migrate(database_path.into(), JournalMode::WAL)?
-        .create_pool(NonZeroU32::new(n_cpus as u32).unwrap())?;
+        .create_pool(NonZeroU32::new(n_cpus as u32 * 2).unwrap())?;
     let mut db = storage
         .connection()
         .context("Opening database connection")?;

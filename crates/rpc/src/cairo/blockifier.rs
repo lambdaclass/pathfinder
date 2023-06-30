@@ -455,9 +455,6 @@ impl StateReader for SqliteReader {
 
         tracing::trace!(%storage_key, "Getting storage value");
 
-        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
-
         let Some(block_id) = self.state_block_id() else {
             return Ok(Felt::ZERO.into());
         };
@@ -486,12 +483,12 @@ impl StateReader for SqliteReader {
 
         tracing::trace!("Getting nonce for contract");
 
-        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
-        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
-
         let Some(block_id) = self.state_block_id() else {
             return Ok(starknet_api::core::Nonce(pathfinder_common::ContractNonce::ZERO.0.into()));
         };
+
+        let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
+        let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
 
         let nonce = tx
             .contract_nonce(pathfinder_contract_address, block_id)
@@ -542,14 +539,12 @@ impl StateReader for SqliteReader {
 
         tracing::trace!("Getting class");
 
+        let block_id = self.state_block_id().ok_or_else(|| {
+            StateError::UndeclaredClassHash(starknet_api::core::ClassHash(class_hash.0.into()))
+        })?;
+
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
         let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
-
-        let block_id = self.state_block_id().ok_or_else(|| {
-            blockifier::state::errors::StateError::UndeclaredClassHash(
-                starknet_api::core::ClassHash(class_hash.0.into()),
-            )
-        })?;
 
         if let Some(casm_definition) = tx
             .compiled_class_definition_at(block_id, class_hash)
@@ -611,14 +606,12 @@ impl StateReader for SqliteReader {
 
         tracing::trace!(%class_hash, "Getting compiled class hash");
 
+        let block_id = self.state_block_id().ok_or_else(|| {
+            StateError::UndeclaredClassHash(starknet_api::core::ClassHash(class_hash.0.into()))
+        })?;
+
         let mut db = self.storage.connection().map_err(map_anyhow_to_state_err)?;
         let tx = db.transaction().map_err(map_anyhow_to_state_err)?;
-
-        let block_id = self.state_block_id().ok_or_else(|| {
-            blockifier::state::errors::StateError::UndeclaredClassHash(
-                starknet_api::core::ClassHash(class_hash.0.into()),
-            )
-        })?;
 
         let casm_hash = tx
             .compiled_class_hash_at(block_id, class_hash)
