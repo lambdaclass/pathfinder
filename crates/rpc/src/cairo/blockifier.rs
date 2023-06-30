@@ -461,7 +461,7 @@ impl StateReader for SqliteReader {
             pathfinder_common::ContractAddress::new_or_panic(contract_address.0.key().into());
 
         let _span =
-            tracing::debug_span!("get_storage_at", contract_address=%pathfinder_contract_address, block_number=%self.block_number)
+            tracing::debug_span!("get_storage_at", block_number=%self.block_number, contract_address=%pathfinder_contract_address, %storage_key)
                 .entered();
 
         tracing::trace!(%storage_key, "Getting storage value");
@@ -601,7 +601,7 @@ impl StateReader for SqliteReader {
             ));
         }
 
-        tracing::error!(%class_hash, "Class definition not found");
+        tracing::error!("Class definition not found");
 
         Err(StateError::StateReadError(format!(
             "Class definition not found for class hash {}",
