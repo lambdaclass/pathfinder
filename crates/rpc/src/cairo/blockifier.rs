@@ -119,7 +119,7 @@ fn construct_block_context(
         gas_price,
         invoke_tx_max_n_steps: 1_000_000,
         validate_max_n_steps: 1_000_000,
-        max_recursion_depth: 50,
+        // max_recursion_depth: 50,
     }
 }
 
@@ -634,6 +634,15 @@ impl StateReader for SqliteReader {
             })?;
 
         Ok(starknet_api::core::CompiledClassHash(casm_hash.0.into()))
+    }
+
+    fn get_fee_token_balance(
+        &mut self,
+        _block_context: &BlockContext,
+        _contract_address: &starknet_api::core::ContractAddress,
+    ) -> Result<(StarkFelt, StarkFelt), StateError> {
+        tracing::debug!("Getting fee token balance");
+        Ok((u128::MAX.into(), 0_u64.into()))
     }
 }
 

@@ -917,6 +917,8 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 name = "blockifier"
 version = "0.1.0"
 dependencies = [
+ "ark-ff",
+ "ark-secp256k1",
  "cairo-felt 0.6.1",
  "cairo-lang-casm 2.0.0",
  "cairo-lang-runner",
@@ -926,6 +928,7 @@ dependencies = [
  "derive_more",
  "indexmap",
  "itertools",
+ "keccak",
  "log",
  "num-bigint 0.4.3",
  "num-integer",
