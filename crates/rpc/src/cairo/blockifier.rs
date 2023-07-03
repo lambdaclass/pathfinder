@@ -464,7 +464,7 @@ impl StateReader for SqliteReader {
             tracing::debug_span!("get_storage_at", block_number=%self.block_number, contract_address=%pathfinder_contract_address, %storage_key)
                 .entered();
 
-        tracing::trace!(%storage_key, "Getting storage value");
+        tracing::trace!("Getting storage value");
 
         let Some(block_id) = self.state_block_id() else {
             return Ok(Felt::ZERO.into());
@@ -477,6 +477,8 @@ impl StateReader for SqliteReader {
             .storage_value(block_id, pathfinder_contract_address, storage_key)
             .map_err(map_anyhow_to_state_err)?
             .unwrap_or(StorageValue(Felt::ZERO));
+
+        tracing::trace!(storage_value=%storage_val, "Got storage value");
 
         Ok(storage_val.0.into())
     }
