@@ -119,7 +119,7 @@ fn construct_block_context(
         gas_price,
         invoke_tx_max_n_steps: 1_000_000,
         validate_max_n_steps: 1_000_000,
-        // max_recursion_depth: 50,
+        max_recursion_depth: 50,
     }
 }
 
