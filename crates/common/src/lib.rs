@@ -22,6 +22,12 @@ pub use header::{BlockHeader, BlockHeaderBuilder};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
 pub struct ContractAddress(Felt);
 
+impl ContractAddress {
+    pub fn one() -> Self {
+        ContractAddress(Felt::from_be_slice(&[1]).unwrap())
+    }
+}
+
 macros::starkhash251::newtype!(ContractAddress);
 macros::starkhash251::deserialization!(ContractAddress);
 
