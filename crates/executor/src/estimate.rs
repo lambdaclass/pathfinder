@@ -40,6 +40,13 @@ pub fn estimate(
                     // return Err(CallError::Reverted(revert_error));
                 }
 
+                match tx_info.execute_call_info {
+                    Some(execute_call_info) => {
+                        dbg!(execute_call_info.execution.retdata);
+                    },
+                    None => {},
+                }
+ 
                 tracing::trace!(actual_fee=%tx_info.actual_fee.0, actual_resources=?tx_info.actual_resources, "Transaction estimation finished");
 
                 fees.push(FeeEstimate {
