@@ -113,7 +113,7 @@ fn estimate_fee_impl(
             Ok(tx_info) => {
                 if let Some(revert_error) = tx_info.revert_error {
                     tracing::info!(%revert_error, "Transaction reverted");
-                    return Err(CallError::Reverted(revert_error));
+                    // return Err(CallError::Reverted(revert_error));
                 }
 
                 tracing::trace!(actual_fee=%tx_info.actual_fee, actual_resources=?tx_info.actual_resources, "Transaction estimation finished");
@@ -126,6 +126,13 @@ fn estimate_fee_impl(
                     )?,
                     _ => tx_info.actual_fee,
                 };
+
+                match tx_info.call_info {
+                    Some(call_info) => {
+                        dbg!(call_info.retdata);
+                    },
+                    None => {},
+                }
 
                 fees.push(FeeEstimate {
                     gas_consumed: U256::from(actual_fee) / gas_price.max(1.into()),
