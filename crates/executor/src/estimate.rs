@@ -37,7 +37,7 @@ pub fn estimate(
             Ok(tx_info) => {
                 if let Some(revert_error) = tx_info.revert_error {
                     tracing::debug!(%revert_error, "Transaction reverted");
-                    return Err(CallError::Reverted(revert_error));
+                    // return Err(CallError::Reverted(revert_error));
                 }
 
                 tracing::trace!(actual_fee=%tx_info.actual_fee.0, actual_resources=?tx_info.actual_resources, "Transaction estimation finished");
@@ -50,7 +50,7 @@ pub fn estimate(
             }
             Err(error) => {
                 tracing::debug!(%error, %transaction_idx, "Transaction estimation failed");
-                return Err(error.into());
+                // return Err(error.into());
             }
         }
     }
