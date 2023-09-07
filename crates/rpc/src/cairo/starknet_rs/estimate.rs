@@ -97,7 +97,7 @@ fn estimate_fee_impl(
         let _enter = span.enter();
 
         let transaction_for_simulation =
-            transaction.create_for_simulation(false, false, true, false, false);
+            transaction.create_for_simulation(false, false, true, true, true);
         let tx_info = transaction_for_simulation.execute(&mut state, &block_context, 100_000_000);
 
         match tx_info {
@@ -126,7 +126,7 @@ fn estimate_fee_impl(
             }
             Err(error) => {
                 tracing::error!(%error, %transaction_idx, "Transaction estimation failed");
-                return Err(error.into());
+                // return Err(error.into());
             }
         }
 
