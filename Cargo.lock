@@ -9015,7 +9015,7 @@ dependencies = [
 [[package]]
 name = "starknet_in_rust"
 version = "0.3.1"
-source = "git+https://github.com/lambdaclass/starknet_in_rust?branch=make-contract-caches-shared#e6933164709800dde5dbf9a2b12b1ecfcc125504"
+source = "git+https://github.com/lambdaclass/starknet_in_rust?branch=make-contract-caches-shared#abd8bcb2f815a600816568194fd3409116b67f8e"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
