@@ -68,7 +68,7 @@ impl StateReader for PathfinderStateReader<'_> {
                     pathfinder_contract_address
                 ))
             })?
-            .ok_or_else(|| StateError::NoneClassHash(contract_address.clone()))?;
+            .unwrap_or_default();
 
         Ok(class_hash.0.to_be_bytes())
     }
