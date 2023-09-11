@@ -32,11 +32,9 @@ impl ExecutionState {
         )?;
 
         let contract_class_cache = HashMap::new();
-        let casm_class_cache = HashMap::new();
         let mut state = CachedState::new(
             Arc::new(state_reader),
-            Some(contract_class_cache),
-            Some(casm_class_cache),
+            contract_class_cache,
         );
 
         self.pending_update.as_ref().map(|pending_update| {
