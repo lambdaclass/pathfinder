@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use pathfinder_common::{BlockNumber, ClassHash, ContractNonce, StorageAddress, StorageValue};
 use stark_hash::Felt;
 use starknet_in_rust::core::errors::state_errors::StateError;
@@ -195,7 +193,11 @@ impl StateReader for PathfinderStateReader<'_> {
                 ))
             })?;
 
-            let contract_class = ContractClass::from_str(definition.as_str()).map_err(|error| {
+            let contract_class = ContractClass::from_program_json_and_class_hash(
+                definition.as_str(),
+                Felt252::from_bytes_be(class_hash),
+            )
+            .map_err(|error| {
                 tracing::error!(%error, "Failed to parse class definition");
                 StateError::CustomError(format!(
                     "Failed to parse Cairo class definition: {}",
