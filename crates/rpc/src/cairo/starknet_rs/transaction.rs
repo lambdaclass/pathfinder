@@ -222,8 +222,9 @@ pub(super) fn map_gateway_transaction(
                     .class_definition(tx.class_hash)?
                     .context("Fetching class definition")?;
                 let contract_class =
-                    starknet_in_rust::services::api::contract_classes::deprecated_contract_class::ContractClass::from_str(
+                    starknet_in_rust::services::api::contract_classes::deprecated_contract_class::ContractClass::from_program_json_and_class_hash(
                         String::from_utf8_lossy(&contract_class).as_ref(),
+                        tx.class_hash.0.into_felt252(),
                     )
                     .map_err(|e| anyhow::anyhow!("Failed to parse class definition: {}", e))?;
 
