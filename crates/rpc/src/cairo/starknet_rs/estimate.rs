@@ -14,9 +14,7 @@ use super::felt::IntoFelt252;
 use super::transaction::{map_broadcasted_transaction, map_gateway_transaction};
 use super::types::FeeEstimate;
 use super::{error::CallError, ExecutionState};
-use starknet_in_rust::state::contract_class_cache::{
-    ContractClassCache, PermanentContractClassCache,
-};
+use starknet_in_rust::state::contract_class_cache::PermanentContractClassCache;
 use std::sync::Arc;
 
 pub fn estimate_fee(
