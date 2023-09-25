@@ -22,8 +22,16 @@ use crate::config::NetworkConfig;
 mod config;
 mod update;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(8 * 1024 * 1024)
+        .build()
+        .unwrap()
+        .block_on(async { async_main().await })
+}
+
+async fn async_main() -> anyhow::Result<()> {
     if std::env::var_os("RUST_LOG").is_none() {
         // Disable all dependency logs by default.
         std::env::set_var("RUST_LOG", "pathfinder=info");
@@ -185,6 +193,7 @@ Hint: This is usually caused by exceeding the file descriptor limit of your syst
         websocket_txs: rpc_server.get_ws_senders(),
         block_cache_size: 1_000,
         restart_delay: config.debug.restart_delay,
+        verify_tree_hashes: config.verify_tree_hashes,
     };
 
     let sync_handle = tokio::spawn(state::sync(sync_context, state::l1::sync, state::l2::sync));
