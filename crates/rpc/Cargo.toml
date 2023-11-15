@@ -30,7 +30,7 @@ stark_hash = { path = "../stark_hash" }
 starknet-gateway-client = { path = "../gateway-client" }
 starknet-gateway-test-fixtures = { path = "../gateway-test-fixtures" }
 starknet-gateway-types = { path = "../gateway-types" }
-starknet_in_rust = { git = "https://github.com/lambdaclass/starknet_in_rust", branch = "make-contract-caches-shared" }
++starknet_in_rust = { path = "../../../starknet_in_rust" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "process"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
