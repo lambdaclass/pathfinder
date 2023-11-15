@@ -125,13 +125,6 @@ fn estimate_fee_impl(
                     _ => tx_info.actual_fee,
                 };
 
-                match tx_info.call_info {
-                    Some(call_info) => {
-                        dbg!(call_info.retdata);
-                    },
-                    None => {},
-                }
-
                 fees.push(FeeEstimate {
                     gas_consumed: U256::from(actual_fee) / gas_price.max(1.into()),
                     gas_price,
