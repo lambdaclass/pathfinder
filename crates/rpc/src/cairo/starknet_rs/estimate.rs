@@ -148,7 +148,7 @@ fn estimate_fee_impl(
         state.cache_mut().update_initial_values();
         state
             .contract_class_cache()
-            .extend(state.drain_private_contract_class_cache());
+            .extend(state.drain_private_contract_class_cache().unwrap());
     }
     Ok(fees)
 }

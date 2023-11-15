@@ -135,7 +135,7 @@ pub(super) fn map_broadcasted_transaction(
                     })?;
 
                 let tx = DeclareV2::new_with_sierra_class_hash(
-                    &contract_class,
+                    Some(contract_class),
                     sierra_class_hash.0.into_felt252(),
                     None,
                     tx.compiled_class_hash.0.into_felt252(),
@@ -304,7 +304,7 @@ pub(super) fn map_gateway_transaction(
                         })?;
 
                 let tx = DeclareV2::new_with_sierra_class_hash_and_tx_hash(
-                    &contract_class,
+                    Some(contract_class),
                     tx.class_hash.0.into_felt252(),
                     None,
                     tx.compiled_class_hash.0.into_felt252(),

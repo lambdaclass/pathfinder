@@ -8389,16 +8389,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_json_pythonic"
-version = "0.1.2"
-source = "git+https://github.com/xJonathanLEI/serde_json_pythonic?tag=v0.1.2#4e4b08bab95309be8672b4efd346bea900040e15"
-dependencies = [
- "itoa",
- "ryu",
- "serde",
-]
-
-[[package]]
 name = "serde_regex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8793,7 +8783,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
- "serde_json_pythonic 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json_pythonic",
  "serde_with",
  "sha3",
  "starknet-crypto 0.6.0",
@@ -9014,8 +9004,7 @@ dependencies = [
 
 [[package]]
 name = "starknet_in_rust"
-version = "0.3.1"
-source = "git+https://github.com/lambdaclass/starknet_in_rust?branch=make-contract-caches-shared#abd8bcb2f815a600816568194fd3409116b67f8e"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
@@ -9037,12 +9026,13 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
- "serde_json_pythonic 0.1.2 (git+https://github.com/xJonathanLEI/serde_json_pythonic?tag=v0.1.2)",
+ "serde_json_pythonic",
  "sha3",
  "starknet",
  "starknet-crypto 0.5.1",
  "starknet_api",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
