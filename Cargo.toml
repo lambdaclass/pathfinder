@@ -31,7 +31,7 @@ resolver = "2"
 [workspace.dependencies]
 anyhow = "1.0.66"
 assert_matches = "1.5.0"
-blockifier = { git = "https://github.com/eqlabs/blockifier", branch = "main-v0.12.1" }
+blockifier = { git = "https://github.com/eqlabs/blockifier", branch = "main" }
 clap = "4.1.13"
 const_format = "0.2.31"
 criterion = "0.5.1"
