@@ -3,11 +3,7 @@ use crate::felt::RpcFelt;
 use anyhow::Context;
 use pathfinder_common::{BlockId, CallParam, CallResultValue, ContractAddress, EntryPoint};
 
-crate::error::generate_rpc_error_subset!(
-    CallError: BlockNotFound,
-    ContractNotFound,
-    ContractError
-);
+crate::error::generate_rpc_error_subset!(CallError: BlockNotFound, ContractNotFound, ContractError);
 
 impl From<crate::cairo::starknet_rs::CallError> for CallError {
     fn from(value: crate::cairo::starknet_rs::CallError) -> Self {

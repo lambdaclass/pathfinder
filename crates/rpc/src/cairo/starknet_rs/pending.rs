@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pathfinder_common::state_update::{ContractUpdate, SystemContractUpdate};
 use pathfinder_common::StateUpdate;
 use starknet_in_rust::core::errors::state_errors::StateError;
-use starknet_in_rust::felt::Felt252;
-use starknet_in_rust::utils::Address;
+use starknet_in_rust::utils::{Address, ClassHash};
+use starknet_in_rust::Felt252;
 
 use super::felt::IntoFelt252;
 
@@ -45,8 +45,10 @@ pub(crate) fn apply_pending_update<S: starknet_in_rust::state::state_api::State>
             use pathfinder_common::state_update::ContractClassUpdate::*;
             match class {
                 Deploy(class_hash) | Replace(class_hash) => {
-                    address_to_class_hash
-                        .insert(contract_address.clone(), class_hash.0.to_be_bytes());
+                    address_to_class_hash.insert(
+                        contract_address.clone(),
+                        ClassHash(class_hash.0.to_be_bytes()),
+                    );
                 }
             };
         }

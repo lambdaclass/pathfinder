@@ -5,7 +5,7 @@ use starknet_in_rust::core::errors::state_errors::StateError;
 use starknet_in_rust::services::api::contract_classes::compiled_class::CompiledClass;
 use starknet_in_rust::services::api::contract_classes::deprecated_contract_class::ContractClass;
 use starknet_in_rust::state::state_api::StateReader;
-use starknet_in_rust::{felt::Felt252, CasmContractClass};
+use starknet_in_rust::{CasmContractClass, Felt252};
 
 use crate::cairo::starknet_rs::felt::IntoFelt252;
 
@@ -68,7 +68,9 @@ impl StateReader for PathfinderStateReader<'_> {
             })?
             .unwrap_or_default();
 
-        Ok(class_hash.0.to_be_bytes())
+        Ok(starknet_in_rust::utils::ClassHash(
+            class_hash.0.to_be_bytes(),
+        ))
     }
 
     fn get_nonce_at(
@@ -147,7 +149,7 @@ impl StateReader for PathfinderStateReader<'_> {
         class_hash: &starknet_in_rust::utils::ClassHash,
     ) -> Result<CompiledClass, StateError> {
         let pathfinder_class_hash =
-            ClassHash(Felt::from_be_slice(class_hash).expect("Overflow in class hash"));
+            ClassHash(Felt::from_be_slice(&class_hash.0).expect("Overflow in class hash"));
 
         let _span =
             tracing::debug_span!("get_compiled_class", class_hash=%pathfinder_class_hash).entered();
@@ -195,7 +197,7 @@ impl StateReader for PathfinderStateReader<'_> {
 
             let contract_class = ContractClass::from_program_json_and_class_hash(
                 definition.as_str(),
-                Felt252::from_bytes_be(class_hash),
+                Felt252::from_bytes_be(&class_hash.0),
             )
             .map_err(|error| {
                 tracing::error!(%error, "Failed to parse class definition");
@@ -218,7 +220,7 @@ impl StateReader for PathfinderStateReader<'_> {
     ) -> Result<starknet_in_rust::utils::CompiledClassHash, StateError> {
         // should return the compiled class hash for a sierra class hash
         let pathfinder_class_hash =
-            ClassHash(Felt::from_be_slice(class_hash).expect("Overflow in class hash"));
+            ClassHash(Felt::from_be_slice(&class_hash.0).expect("Overflow in class hash"));
 
         let _span =
             tracing::debug_span!("get_compiled_class_hash", %pathfinder_class_hash).entered();
@@ -240,7 +242,9 @@ impl StateReader for PathfinderStateReader<'_> {
             .map_err(map_anyhow_to_state_err)?
             .ok_or(StateError::NoneCompiledHash(*class_hash))?;
 
-        Ok(casm_hash.0.to_be_bytes())
+        Ok(starknet_in_rust::utils::ClassHash(
+            casm_hash.0.to_be_bytes(),
+        ))
     }
 }
 

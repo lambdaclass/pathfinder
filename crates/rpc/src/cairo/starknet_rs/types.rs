@@ -141,7 +141,7 @@ impl TryFrom<starknet_in_rust::execution::CallInfo> for FunctionInvocation {
             internal_calls,
             class_hash: call_info
                 .class_hash
-                .and_then(|class_hash| Felt::from_be_bytes(class_hash).ok()),
+                .and_then(|class_hash| Felt::from_be_bytes(class_hash.0).ok()),
             entry_point_type: call_info.entry_point_type.map(Into::into),
             events,
             messages,

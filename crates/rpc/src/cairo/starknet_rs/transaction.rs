@@ -9,7 +9,7 @@ use starknet_in_rust::transaction::error::TransactionError;
 use starknet_in_rust::transaction::{
     Declare, DeclareV2, Deploy, DeployAccount, InvokeFunction, L1Handler, Transaction,
 };
-use starknet_in_rust::{felt::Felt252, SierraContractClass};
+use starknet_in_rust::{Felt252, SierraContractClass};
 
 use super::felt::IntoFelt;
 use crate::cairo::starknet_rs::felt::IntoFelt252;
@@ -64,7 +64,7 @@ pub(super) fn map_broadcasted_transaction(
                     chain_id.0.into_felt252(),
                     Address(tx.sender_address.get().into_felt252()),
                     0,
-                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                    Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                     signature,
                     0.into(),
                 )?;
@@ -96,7 +96,7 @@ pub(super) fn map_broadcasted_transaction(
                     chain_id.0.into_felt252(),
                     Address(tx.sender_address.get().into_felt252()),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                    Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                     signature,
                     tx.nonce.0.into_felt252(),
                 )?;
@@ -142,7 +142,7 @@ pub(super) fn map_broadcasted_transaction(
                     chain_id.0.into_felt252(),
                     Address(tx.sender_address.get().into_felt252()),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                    Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                     signature,
                     tx.nonce.0.into_felt252(),
                 )?;
@@ -166,7 +166,7 @@ pub(super) fn map_broadcasted_transaction(
                     Address(tx.sender_address.get().into_felt252()),
                     starknet_in_rust::definitions::constants::EXECUTE_ENTRY_POINT_SELECTOR.clone(),
                     u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                    Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                    Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                     calldata,
                     signature,
                     chain_id.0.into_felt252(),
@@ -187,9 +187,9 @@ pub(super) fn map_broadcasted_transaction(
                 .map(|s| s.0.into_felt252())
                 .collect();
             let tx = DeployAccount::new(
-                tx.class_hash.0.to_be_bytes(),
+                starknet_in_rust::utils::ClassHash(tx.class_hash.0.to_be_bytes()),
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                 tx.nonce.0.into_felt252(),
                 constructor_calldata,
                 signature,
@@ -356,9 +356,9 @@ pub(super) fn map_gateway_transaction(
                 .map(|s| s.0.into_felt252())
                 .collect();
             let tx = DeployAccount::new_with_tx_hash(
-                tx.class_hash.0.to_be_bytes(),
+                starknet_in_rust::utils::ClassHash(tx.class_hash.0.to_be_bytes()),
                 u128::from_be_bytes(tx.max_fee.0.to_be_bytes()[16..].try_into().unwrap()),
-                Felt252::from_bytes_be(tx.version.0.as_bytes()),
+                Felt252::from_bytes_be_slice(tx.version.0.as_bytes()),
                 tx.nonce.0.into_felt252(),
                 constructor_calldata,
                 signature,

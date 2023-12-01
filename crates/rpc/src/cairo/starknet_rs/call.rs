@@ -6,7 +6,7 @@ use starknet_in_rust::execution::TransactionExecutionContext;
 
 use starknet_in_rust::state::ExecutionResourcesManager;
 use starknet_in_rust::utils::Address;
-use starknet_in_rust::{felt::Felt252, EntryPointType};
+use starknet_in_rust::{EntryPointType, Felt252};
 
 use super::estimate::CONTRACT_CLASS_CACHE;
 use super::{error::CallError, ExecutionState};
