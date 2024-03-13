@@ -88,3 +88,14 @@ tokio = "1.29.1"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 zstd = { version = "0.12.4", features = ["pkg-config"] }
+cairo-felt = "0.9.1"
+
+[patch.crates-io]
+cairo-vm = { git = "https://github.com/lambdaclass/cairo-vm.git", default-features = false, branch = "0.9.2-bigint-from", features = [
+    "lambdaworks-felt",
+    "std"
+]}
+cairo-felt = { git = "https://github.com/lambdaclass/cairo-vm.git", default-features = false, branch = "0.9.2-bigint-from", features = [
+    "lambdaworks-felt",
+    "std"
+]}
