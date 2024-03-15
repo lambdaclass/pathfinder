@@ -1043,7 +1043,7 @@ dependencies = [
 [[package]]
 name = "cairo-felt"
 version = "0.9.1"
-source = "git+https://github.com/lambdaclass/cairo-vm.git?branch=experimental/v0.9.2_compact_memory_cell#0d1ea99ac2b58bd3fb6d8bc7498262d862f44e16"
+source = "git+https://github.com/lambdaclass/cairo-vm.git?branch=perf/compact_memory_cell#ba86beb8afa2568ecdbd935df85039d937076fd9"
 dependencies = [
  "lazy_static",
  "num-bigint",
@@ -2653,7 +2653,7 @@ dependencies = [
 [[package]]
 name = "cairo-vm"
 version = "0.9.2"
-source = "git+https://github.com/lambdaclass/cairo-vm.git?branch=experimental/v0.9.2_compact_memory_cell#0d1ea99ac2b58bd3fb6d8bc7498262d862f44e16"
+source = "git+https://github.com/lambdaclass/cairo-vm.git?branch=perf/compact_memory_cell#ba86beb8afa2568ecdbd935df85039d937076fd9"
 dependencies = [
  "anyhow",
  "bincode",
