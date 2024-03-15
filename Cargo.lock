@@ -1045,7 +1045,6 @@ name = "cairo-felt"
 version = "0.9.1"
 source = "git+https://github.com/lambdaclass/cairo-vm.git?branch=experimental/v0.9.2_compact_memory_cell#0d1ea99ac2b58bd3fb6d8bc7498262d862f44e16"
 dependencies = [
- "lambdaworks-math",
  "lazy_static",
  "num-bigint",
  "num-integer",
@@ -4647,12 +4646,6 @@ checksum = "507460a910eb7b32ee961886ff48539633b788a36b65692b95f225b844c82553"
 dependencies = [
  "regex-automata 0.4.6",
 ]
-
-[[package]]
-name = "lambdaworks-math"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ee7dcab3968c71896b8ee4dc829147acc918cffe897af6265b1894527fe3add"
 
 [[package]]
 name = "lazy_static"
